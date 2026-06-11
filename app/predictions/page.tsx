@@ -1,0 +1,183 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { TEAMS } from '../admin/matches/page'
+
+type Team = { id: string, name: string, flagUrl?: string | null }
+type Match = { id: string, teamA: Team, teamB: Team, isFinished: boolean, teamAScore: number | null, teamBScore: number | null, date?: string | null }
+type Stage = { id: string, name: string, matches: Match[] }
+type Prediction = { matchId: string, teamAScore: number, teamBScore: number, pointsEarned: number | null }
+
+export default function PredictionsPage() {
+  const [stages, setStages] = useState<Stage[]>([])
+  const [predictions, setPredictions] = useState<Record<string, Prediction>>({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/predictions')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          setStages(data.stages)
+          const predMap: Record<string, Prediction> = {}
+          data.predictions.forEach((p: Prediction) => {
+            predMap[p.matchId] = p
+          })
+          setPredictions(predMap)
+        }
+        setLoading(false)
+      })
+  }, [])
+
+  const handleSavePrediction = async (matchId: string, scoreA: number, scoreB: number) => {
+    // Optimistic update
+    setPredictions(prev => ({ ...prev, [matchId]: { matchId, teamAScore: scoreA, teamBScore: scoreB, pointsEarned: null } }))
+    
+    await fetch('/api/predictions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matchId, teamAScore: scoreA, teamBScore: scoreB })
+    })
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', marginTop: '40px' }}>Cargando pronósticos...</div>
+
+  return (
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+        <h1>Mis Pronósticos</h1>
+        <p style={{ color: 'var(--text-muted)' }}>Ingresa tus predicciones para los partidos activos. ¡Se guardan automáticamente!</p>
+      </div>
+
+      {stages.length === 0 ? (
+        <div className="glass-card" style={{ textAlign: 'center', padding: '40px' }}>
+          <p style={{ color: 'var(--text-muted)' }}>No hay fases activas actualmente.</p>
+        </div>
+      ) : (
+        stages.map(stage => (
+          <div key={stage.id} style={{ marginBottom: '32px' }}>
+            <h2 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '16px' }}>{stage.name}</h2>
+            {stage.matches.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>No hay partidos programados.</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                {stage.matches.map(match => (
+                  <PredictionCard 
+                    key={match.id} 
+                    match={match}
+                    stageName={stage.name}
+                    prediction={predictions[match.id]} 
+                    onSave={handleSavePrediction} 
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+function PredictionCard({ match, stageName, prediction, onSave }: { match: Match, stageName: string, prediction?: Prediction, onSave: (id: string, a: number, b: number) => void }) {
+  const [scoreA, setScoreA] = useState(prediction?.teamAScore ?? '')
+  const [scoreB, setScoreB] = useState(prediction?.teamBScore ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const groupName = stageName === 'Fase de Grupos' ? (TEAMS.find(t => t.name === match.teamA.name)?.group || '') : ''
+  
+  const isLocked = match.isFinished || (match.date && new Date() >= new Date(match.date))
+
+  const handleSave = () => {
+    if (scoreA !== '' && scoreB !== '' && !isLocked) {
+      setSaving(true)
+      onSave(match.id, Number(scoreA), Number(scoreB))
+      setTimeout(() => {
+        setSaving(false)
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2000)
+      }, 500)
+    }
+  }
+
+  return (
+    <div className="glass-card" style={{ padding: '24px 20px 20px', position: 'relative' }}>
+      
+      {groupName && <div style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.8rem', fontWeight: 800, color: 'var(--secondary)' }}>{groupName.toUpperCase()}</div>}
+      {match.date && <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', fontSize: '0.75rem', color: isLocked ? 'var(--danger)' : 'var(--text-muted)' }}>{new Date(match.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>}
+
+      {isLocked && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 'var(--radius)' }}>
+          <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '8px' }}>
+            {match.isFinished ? 'Partido Finalizado' : '🔒 Pronóstico Cerrado'}
+          </span>
+          {match.isFinished && (
+            <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '16px' }}>
+              Resultado: {match.teamAScore} - {match.teamBScore}
+            </span>
+          )}
+          {prediction && prediction.pointsEarned !== null && (
+            <span style={{ marginTop: '8px', color: prediction.pointsEarned > 0 ? 'var(--success)' : 'var(--text-muted)', fontWeight: 'bold' }}>
+              +{prediction.pointsEarned} pts
+            </span>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', marginTop: '16px' }}>
+        <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+          {match.teamA.flagUrl ? (
+            <img src={`https://flagcdn.com/w80/${match.teamA.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
+          ) : (
+            <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
+          )}
+          <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamA.name}</span>
+        </div>
+        
+        <div style={{ padding: '0 16px', color: 'var(--text-muted)', fontWeight: 600 }}>vs</div>
+        
+        <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+          {match.teamB.flagUrl ? (
+             <img src={`https://flagcdn.com/w80/${match.teamB.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
+          ) : (
+            <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
+          )}
+          <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamB.name}</span>
+        </div>
+      </div>
+      
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center' }}>
+        <input 
+          type="number" 
+          className="input" 
+          style={{ width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px' }} 
+          value={scoreA} 
+          onChange={e => setScoreA(e.target.value)} 
+          min={0}
+          placeholder="-"
+        />
+        <input 
+          type="number" 
+          className="input" 
+          style={{ width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px' }} 
+          value={scoreB} 
+          onChange={e => setScoreB(e.target.value)} 
+          min={0}
+          placeholder="-"
+        />
+      </div>
+
+      <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+        <button 
+          className={`btn ${saved ? 'btn-surface' : 'btn-primary'}`} 
+          style={{ width: '100%', borderColor: saved ? 'var(--success)' : 'transparent', color: saved ? 'var(--success)' : undefined }}
+          onClick={handleSave}
+          disabled={Boolean(saving || scoreA === '' || scoreB === '' || isLocked)}
+        >
+          {saving ? 'Guardando...' : saved ? '¡Guardado!' : isLocked ? 'Cerrado' : 'Guardar Pronóstico'}
+        </button>
+      </div>
+    </div>
+  )
+}
