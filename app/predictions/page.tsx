@@ -78,16 +78,18 @@ export default function PredictionsPage() {
     </div>
   )
 }
-
 function PredictionCard({ match, stageName, prediction, onSave }: { match: Match, stageName: string, prediction?: Prediction, onSave: (id: string, a: number, b: number) => void }) {
   const [scoreA, setScoreA] = useState(prediction?.teamAScore ?? '')
   const [scoreB, setScoreB] = useState(prediction?.teamBScore ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [isEditing, setIsEditing] = useState(prediction === undefined)
+
   const groupName = stageName === 'Fase de Grupos' ? (TEAMS.find(t => t.name === match.teamA.name)?.group || '') : ''
-  
-  const isLocked = match.isFinished || (match.date && new Date() >= new Date(match.date))
+
+  // CORRECCIÓN 1: Forzamos que isLocked sea estrictamente true o false
+  const isLocked = Boolean(match.isFinished || (match.date && new Date() >= new Date(match.date)))
 
   const handleSave = () => {
     if (scoreA !== '' && scoreB !== '' && !isLocked) {
@@ -96,88 +98,109 @@ function PredictionCard({ match, stageName, prediction, onSave }: { match: Match
       setTimeout(() => {
         setSaving(false)
         setSaved(true)
+        setIsEditing(false)
         setTimeout(() => setSaved(false), 2000)
       }, 500)
     }
   }
 
   return (
-    <div className="glass-card" style={{ padding: '24px 20px 20px', position: 'relative' }}>
-      
-      {groupName && <div style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.8rem', fontWeight: 800, color: 'var(--secondary)' }}>{groupName.toUpperCase()}</div>}
-      {match.date && <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', fontSize: '0.75rem', color: isLocked ? 'var(--danger)' : 'var(--text-muted)' }}>{new Date(match.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>}
+      <div className="glass-card" style={{ padding: '24px 20px 20px', position: 'relative' }}>
 
-      {isLocked && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 'var(--radius)' }}>
+        {groupName && <div style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.8rem', fontWeight: 800, color: 'var(--secondary)' }}>{groupName.toUpperCase()}</div>}
+        {match.date && <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', fontSize: '0.75rem', color: isLocked ? 'var(--danger)' : 'var(--text-muted)' }}>{new Date(match.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>}
+
+        {isLocked && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 'var(--radius)' }}>
           <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '8px' }}>
             {match.isFinished ? 'Partido Finalizado' : '🔒 Pronóstico Cerrado'}
           </span>
-          {match.isFinished && (
-            <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '16px' }}>
+              {match.isFinished && (
+                  <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '16px' }}>
               Resultado: {match.teamAScore} - {match.teamBScore}
             </span>
-          )}
-          {prediction && prediction.pointsEarned !== null && (
-            <span style={{ marginTop: '8px', color: prediction.pointsEarned > 0 ? 'var(--success)' : 'var(--text-muted)', fontWeight: 'bold' }}>
+              )}
+              {prediction && prediction.pointsEarned !== null && (
+                  <span style={{ marginTop: '8px', color: prediction.pointsEarned > 0 ? 'var(--success)' : 'var(--text-muted)', fontWeight: 'bold' }}>
               +{prediction.pointsEarned} pts
             </span>
-          )}
-        </div>
-      )}
+              )}
+            </div>
+        )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', marginTop: '16px' }}>
-        <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-          {match.teamA.flagUrl ? (
-            <img src={`https://flagcdn.com/w80/${match.teamA.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
-          ) : (
-            <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
-          )}
-          <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamA.name}</span>
-        </div>
-        
-        <div style={{ padding: '0 16px', color: 'var(--text-muted)', fontWeight: 600 }}>vs</div>
-        
-        <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-          {match.teamB.flagUrl ? (
-             <img src={`https://flagcdn.com/w80/${match.teamB.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
-          ) : (
-            <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
-          )}
-          <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamB.name}</span>
-        </div>
-      </div>
-      
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center' }}>
-        <input 
-          type="number" 
-          className="input" 
-          style={{ width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px' }} 
-          value={scoreA} 
-          onChange={e => setScoreA(e.target.value)} 
-          min={0}
-          placeholder="-"
-        />
-        <input 
-          type="number" 
-          className="input" 
-          style={{ width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px' }} 
-          value={scoreB} 
-          onChange={e => setScoreB(e.target.value)} 
-          min={0}
-          placeholder="-"
-        />
-      </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', marginTop: '16px' }}>
+          <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            {match.teamA.flagUrl ? (
+                <img src={`https://flagcdn.com/w80/${match.teamA.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
+            ) : (
+                <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
+            )}
+            <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamA.name}</span>
+          </div>
 
-      <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
-        <button 
-          className={`btn ${saved ? 'btn-surface' : 'btn-primary'}`} 
-          style={{ width: '100%', borderColor: saved ? 'var(--success)' : 'transparent', color: saved ? 'var(--success)' : undefined }}
-          onClick={handleSave}
-          disabled={Boolean(saving || scoreA === '' || scoreB === '' || isLocked)}
-        >
-          {saving ? 'Guardando...' : saved ? '¡Guardado!' : isLocked ? 'Cerrado' : 'Guardar Pronóstico'}
-        </button>
+          <div style={{ padding: '0 16px', color: 'var(--text-muted)', fontWeight: 600 }}>vs</div>
+
+          <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            {match.teamB.flagUrl ? (
+                <img src={`https://flagcdn.com/w80/${match.teamB.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
+            ) : (
+                <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
+            )}
+            <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamB.name}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center' }}>
+          <input
+              type="number"
+              className="input"
+              style={{
+                width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px',
+                opacity: !isEditing ? 0.6 : 1,
+                cursor: !isEditing ? 'default' : 'text'
+              }}
+              value={scoreA}
+              onChange={e => setScoreA(e.target.value)}
+              min={0}
+              placeholder="-"
+              disabled={Boolean(!isEditing || isLocked)} // CORRECCIÓN 2: Boolean estricto
+          />
+          <input
+              type="number"
+              className="input"
+              style={{
+                width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px',
+                opacity: !isEditing ? 0.6 : 1,
+                cursor: !isEditing ? 'default' : 'text'
+              }}
+              value={scoreB}
+              onChange={e => setScoreB(e.target.value)}
+              min={0}
+              placeholder="-"
+              disabled={Boolean(!isEditing || isLocked)} // CORRECCIÓN 3: Boolean estricto
+          />
+        </div>
+
+        <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+          {!isEditing && !isLocked ? (
+              <button
+                  className="btn btn-surface"
+                  style={{ width: '100%', borderColor: 'var(--border)' }}
+                  onClick={() => setIsEditing(true)}
+              >
+                Editar
+              </button>
+          ) : (
+              <button
+                  className={`btn ${saved ? 'btn-surface' : 'btn-primary'}`}
+                  style={{ width: '100%', borderColor: saved ? 'var(--success)' : 'transparent', color: saved ? 'var(--success)' : undefined }}
+                  onClick={handleSave}
+                  disabled={Boolean(saving || scoreA === '' || scoreB === '' || isLocked)}
+              >
+                {saving ? 'Guardando...' : saved ? '¡Guardado!' : isLocked ? 'Cerrado' : 'Guardar'}
+              </button>
+          )}
+        </div>
       </div>
-    </div>
   )
 }
