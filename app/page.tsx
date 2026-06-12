@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { Trophy, Coins, Star, Users } from 'lucide-react'
+import ResetPasswordButton from '@/components/ResetPasswordButton'
 
 // Force dynamic to avoid caching issues with real-time leaderboard
 export const dynamic = 'force-dynamic'
@@ -107,48 +108,61 @@ export default async function Home() {
           <Trophy color="var(--secondary)" />
           <h2>Tabla de Posiciones</h2>
         </div>
-        
+
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ background: 'rgba(255, 255, 255, 0.05)' }}>
-                  <th style={{ padding: '16px', color: 'var(--text-muted)', fontWeight: 600, width: '60px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '16px', color: 'var(--text-muted)', fontWeight: 600 }}>Usuario</th>
-                  <th style={{ padding: '16px', color: 'var(--text-muted)', fontWeight: 600, textAlign: 'right' }}>Puntos</th>
-                </tr>
+              <tr style={{ background: 'rgba(255, 255, 255, 0.05)' }}>
+                <th style={{ padding: '16px', color: 'var(--text-muted)', fontWeight: 600, width: '60px', textAlign: 'center' }}>#</th>
+                <th style={{ padding: '16px', color: 'var(--text-muted)', fontWeight: 600 }}>Usuario</th>
+                <th style={{ padding: '16px', color: 'var(--text-muted)', fontWeight: 600, textAlign: 'right' }}>Puntos</th>
+                {/* Nueva cabecera: Solo se muestra si el rol es ADMIN */}
+                {session?.user.role === 'ADMIN' && (
+                    <th style={{ padding: '16px', color: 'var(--text-muted)', fontWeight: 600, textAlign: 'center' }}>Acciones (Admin)</th>
+                )}
+              </tr>
               </thead>
               <tbody>
-                {users.length === 0 ? (
+              {users.length === 0 ? (
                   <tr>
-                    <td colSpan={3} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <td colSpan={session?.user.role === 'ADMIN' ? 4 : 3} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       No hay usuarios registrados todavía.
                     </td>
                   </tr>
-                ) : (
+              ) : (
                   users.map((user, index) => {
                     const isMe = session?.user.id === user.id
                     return (
-                      <tr key={user.id} style={{ borderTop: '1px solid var(--glass-border)', background: isMe ? 'rgba(0, 242, 254, 0.04)' : undefined }}>
-                        <td style={{ padding: '16px', textAlign: 'center', fontWeight: 800, color: index < 3 ? 'var(--primary)' : 'var(--text-muted)' }}>
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                        </td>
-                        <td style={{ padding: '16px', fontWeight: 500 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: isMe ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : 'linear-gradient(135deg, var(--surface-hover), var(--surface))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: isMe ? '#000' : undefined }}>
-                              {user.username.charAt(0).toUpperCase()}
+                        <tr key={user.id} style={{ borderTop: '1px solid var(--glass-border)', background: isMe ? 'rgba(0, 242, 254, 0.04)' : undefined }}>
+                          <td style={{ padding: '16px', textAlign: 'center', fontWeight: 800, color: index < 3 ? 'var(--primary)' : 'var(--text-muted)' }}>
+                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                          </td>
+                          <td style={{ padding: '16px', fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: isMe ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : 'linear-gradient(135deg, var(--surface-hover), var(--surface))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: isMe ? '#000' : undefined }}>
+                                {user.username.charAt(0).toUpperCase()}
+                              </div>
+                              <span>{user.username}</span>
+                              {isMe && <span style={{ fontSize: '0.75rem', background: 'rgba(0, 242, 254, 0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '8px', fontWeight: 700 }}>Tú</span>}
                             </div>
-                            <span>{user.username}</span>
-                            {isMe && <span style={{ fontSize: '0.75rem', background: 'rgba(0, 242, 254, 0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '8px', fontWeight: 700 }}>Tú</span>}
-                          </div>
-                        </td>
-                        <td style={{ padding: '16px', textAlign: 'right', fontWeight: 700, fontSize: '1.2rem', color: 'var(--text)' }}>
-                          {user.totalPoints} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>pts</span>
-                        </td>
-                      </tr>
+                          </td>
+                          <td style={{ padding: '16px', textAlign: 'right', fontWeight: 700, fontSize: '1.2rem', color: 'var(--text)' }}>
+                            {user.totalPoints} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>pts</span>
+                          </td>
+
+                          {/* Nueva celda: Renderizamos el botón importado solo para el ADMIN */}
+                          {session?.user.role === 'ADMIN' && (
+                              <td style={{ padding: '16px', textAlign: 'center' }}>
+                                {/* IMPORTANTE: Recuerda importar este componente al inicio del archivo: 
+                                import ResetPasswordButton from '@/components/ResetPasswordButton' */}
+                                <ResetPasswordButton userId={user.id} username={user.username} />
+                              </td>
+                          )}
+                        </tr>
                     )
                   })
-                )}
+              )}
               </tbody>
             </table>
           </div>
