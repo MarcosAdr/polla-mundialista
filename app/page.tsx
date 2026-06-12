@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { Trophy, Coins, Star, Users } from 'lucide-react'
 import ResetPasswordButton from '@/components/ResetPasswordButton'
+import GroupStandings from '@/components/GroupStandings'
+import { calculateGroups } from '@/lib/standings'
 
 // Force dynamic to avoid caching issues with real-time leaderboard
 export const dynamic = 'force-dynamic'
@@ -19,6 +21,20 @@ export default async function Home() {
       contributedAmount: true,
     }
   })
+
+  const matchesForStandings = await prisma.match.findMany({
+    where: {
+      isFinished: true,
+      stage: { name: 'Fase de Grupos' } // Asegúrate de que el string coincida con tu BD
+    },
+    include: {
+      teamA: true,
+      teamB: true,
+      stage: true
+    }
+  });
+
+  const groupsData = calculateGroups(matchesForStandings);
 
   const totalPool = users.reduce((sum, user) => sum + user.contributedAmount, 0)
   const totalParticipants = users.length
@@ -101,6 +117,7 @@ export default async function Home() {
           </div>
         </section>
       )}
+      
 
       {/* Leaderboard */}
       <section>
@@ -168,7 +185,23 @@ export default async function Home() {
           </div>
         </div>
       </section>
+      <section>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <Trophy color="var(--primary)" />
+          <h2>Fase de Grupos</h2>
+        </div>
 
+        {/* Usamos CSS Grid para que se vean una al lado de la otra en pantallas grandes */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px' }}>
+          {Object.keys(groupsData).length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>Aún no hay datos de grupos.</p>
+          ) : (
+              Object.entries(groupsData).map(([groupName, standings]) => (
+                  <GroupStandings key={groupName} groupName={groupName} standings={standings} />
+              ))
+          )}
+        </div>
+      </section>
     </div>
   )
 }
