@@ -12,6 +12,8 @@ export default function PredictionsPage() {
     const [stages, setStages] = useState<Stage[]>([])
     const [predictions, setPredictions] = useState<Record<string, Prediction>>({})
     const [loading, setLoading] = useState(true)
+    // Estado para guardar el partido más próximo por cerrar
+    const [urgentMatch, setUrgentMatch] = useState<Match | null>(null)
 
     useEffect(() => {
         fetch('/api/predictions')
@@ -29,6 +31,25 @@ export default function PredictionsPage() {
                     });
 
                     setStages(sortedStages)
+
+                    // LÓGICA: Encontrar el partido más cercano en el futuro
+                    let closest: Match | null = null;
+                    let minTime = Infinity;
+                    const now = Date.now();
+
+                    data.stages.forEach((stage: Stage) => {
+                        stage.matches.forEach((match: Match) => {
+                            if (!match.isFinished && match.date) {
+                                const matchTime = new Date(match.date).getTime();
+                                // Si el partido está en el futuro y es el más cercano que hemos visto
+                                if (matchTime > now && matchTime < minTime) {
+                                    minTime = matchTime;
+                                    closest = match;
+                                }
+                            }
+                        });
+                    });
+                    setUrgentMatch(closest)
 
                     const predMap: Record<string, Prediction> = {}
                     data.predictions.forEach((p: Prediction) => {
@@ -50,6 +71,23 @@ export default function PredictionsPage() {
         })
     }
 
+    // Función auxiliar para calcular de forma amigable cuánto tiempo falta
+    const getRemainingTimeText = (dateStr: string) => {
+        const diffMs = new Date(dateStr).getTime() - Date.now();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+
+        if (diffMins < 60) {
+            return `en ${diffMins} minutos`;
+        } else if (diffHours < 24) {
+            const remainingMins = diffMins % 60;
+            return `en ${diffHours}h y ${remainingMins}m`;
+        } else {
+            const diffDays = Math.floor(diffHours / 24);
+            return `en ${diffDays} día${diffDays > 1 ? 's' : ''}`;
+        }
+    }
+
     if (loading) return <div style={{ textAlign: 'center', marginTop: '40px' }}>Cargando pronósticos...</div>
 
     return (
@@ -59,13 +97,36 @@ export default function PredictionsPage() {
                 <p style={{ color: 'var(--text-muted)' }}>Ingresa tus predicciones para los partidos activos. ¡Se guardan automáticamente!</p>
             </div>
 
+            {/* BANNER DE ALERTA GLOBAL (Solo si existe un partido próximo disponible) */}
+            {urgentMatch && (
+                <div className="glass-card" style={{
+                    borderLeft: '4px solid #f59e0b', // Borde color ámbar de advertencia
+                    background: 'rgba(245, 158, 11, 0.04)',
+                    padding: '16px 20px',
+                    borderRadius: 'var(--radius)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    boxShadow: '0 4px 20px rgba(245, 158, 11, 0.05)'
+                }}>
+                    <span style={{ fontSize: '1.8rem', animation: 'pulse 2s infinite' }}>⏳</span>
+                    <div style={{ flex: 1 }}>
+                        <strong style={{ color: '#f59e0b', fontSize: '1.05rem', display: 'block', marginBottom: '2px' }}>
+                            ¡Próximo partido por cerrar!
+                        </strong>
+                        <span style={{ color: 'var(--text)', fontSize: '0.95rem' }}>
+                            El tiempo para pronosticar el partido <strong>{urgentMatch.teamA.name} vs {urgentMatch.teamB.name}</strong> finaliza <strong>{getRemainingTimeText(urgentMatch.date!)}</strong>.
+                        </span>
+                    </div>
+                </div>
+            )}
+
             {stages.length === 0 ? (
                 <div className="glass-card" style={{ textAlign: 'center', padding: '40px' }}>
                     <p style={{ color: 'var(--text-muted)' }}>No hay fases activas actualmente.</p>
                 </div>
             ) : (
                 stages.map(stage => {
-                    // LÓGICA DE SEPARACIÓN: Filtramos los activos y los cerrados
                     const activeMatches = stage.matches.filter(m => !Boolean(m.isFinished || (m.date && new Date() >= new Date(m.date))))
                     const pastMatches = stage.matches.filter(m => Boolean(m.isFinished || (m.date && new Date() >= new Date(m.date))))
 
@@ -77,7 +138,7 @@ export default function PredictionsPage() {
                                 <p style={{ color: 'var(--text-muted)' }}>No hay partidos programados.</p>
                             ) : (
                                 <>
-                                    {/* SECCIÓN 1: Partidos Activos */}
+                                    {/* Partidos Activos */}
                                     {activeMatches.length > 0 ? (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
                                             {activeMatches.map(match => (
@@ -96,7 +157,7 @@ export default function PredictionsPage() {
                                         </div>
                                     )}
 
-                                    {/* SECCIÓN 2: Partidos Cerrados (Ocultos por defecto) */}
+                                    {/* Partidos Cerrados (Ocultos por defecto) */}
                                     {pastMatches.length > 0 && (
                                         <details style={{
                                             marginTop: '24px',
@@ -109,12 +170,9 @@ export default function PredictionsPage() {
                                                 cursor: 'pointer',
                                                 fontWeight: 'bold',
                                                 color: 'var(--text-muted)',
-                                                userSelect: 'none',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '8px'
+                                                userSelect: 'none'
                                             }}>
-                                                <span>Ver partidos finalizados ({pastMatches.length})</span>
+                                                Ver partidos cerrados / finalizados ({pastMatches.length})
                                             </summary>
 
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px', marginTop: '20px' }}>
