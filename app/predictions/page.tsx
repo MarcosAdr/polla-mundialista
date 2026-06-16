@@ -18,7 +18,20 @@ export default function PredictionsPage() {
             .then(res => res.json())
             .then(data => {
                 if (!data.error) {
-                    setStages(data.stages)
+                    // ORDENAR PARTIDOS POR FECHA (CRONOLÓGICAMENTE)
+                    const sortedStages = data.stages.map((stage: Stage) => {
+                        const sortedMatches = [...stage.matches].sort((a, b) => {
+                            // Si alguno no tiene fecha, lo mandamos al final
+                            if (!a.date) return 1;
+                            if (!b.date) return -1;
+                            // Ordenamos de más antiguo a más reciente
+                            return new Date(a.date).getTime() - new Date(b.date).getTime();
+                        });
+                        return { ...stage, matches: sortedMatches };
+                    });
+
+                    setStages(sortedStages)
+
                     const predMap: Record<string, Prediction> = {}
                     data.predictions.forEach((p: Prediction) => {
                         predMap[p.matchId] = p
