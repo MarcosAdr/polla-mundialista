@@ -94,7 +94,7 @@ export default function PredictionsPage() {
         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             <div style={{ textAlign: 'center', marginBottom: '16px' }}>
                 <h1>Mis Pronósticos</h1>
-                <p style={{ color: 'var(--text-muted)' }}>Ingresa tus predicciones para los partidos activos. ¡Se guardan automáticamente!</p>
+                <p style={{ color: 'var(--text-muted)' }}>Ingresa tus predicciones para los partidos activos.</p>
             </div>
 
             {/* BANNER DE ALERTA GLOBAL (Solo si existe un partido próximo disponible) */}
