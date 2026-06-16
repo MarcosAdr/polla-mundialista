@@ -18,13 +18,11 @@ export default function PredictionsPage() {
             .then(res => res.json())
             .then(data => {
                 if (!data.error) {
-                    // ORDENAR PARTIDOS POR FECHA (CRONOLÓGICAMENTE)
+                    // Ordenar partidos cronológicamente
                     const sortedStages = data.stages.map((stage: Stage) => {
                         const sortedMatches = [...stage.matches].sort((a, b) => {
-                            // Si alguno no tiene fecha, lo mandamos al final
                             if (!a.date) return 1;
                             if (!b.date) return -1;
-                            // Ordenamos de más antiguo a más reciente
                             return new Date(a.date).getTime() - new Date(b.date).getTime();
                         });
                         return { ...stage, matches: sortedMatches };
@@ -43,7 +41,6 @@ export default function PredictionsPage() {
     }, [])
 
     const handleSavePrediction = async (matchId: string, scoreA: number, scoreB: number) => {
-        // Optimistic update
         setPredictions(prev => ({ ...prev, [matchId]: { matchId, teamAScore: scoreA, teamBScore: scoreB, pointsEarned: null } }))
 
         await fetch('/api/predictions', {
@@ -67,26 +64,77 @@ export default function PredictionsPage() {
                     <p style={{ color: 'var(--text-muted)' }}>No hay fases activas actualmente.</p>
                 </div>
             ) : (
-                stages.map(stage => (
-                    <div key={stage.id} style={{ marginBottom: '32px' }}>
-                        <h2 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '16px' }}>{stage.name}</h2>
-                        {stage.matches.length === 0 ? (
-                            <p style={{ color: 'var(--text-muted)' }}>No hay partidos programados.</p>
-                        ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-                                {stage.matches.map(match => (
-                                    <PredictionCard
-                                        key={match.id}
-                                        match={match}
-                                        stageName={stage.name}
-                                        prediction={predictions[match.id]}
-                                        onSave={handleSavePrediction}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                ))
+                stages.map(stage => {
+                    // LÓGICA DE SEPARACIÓN: Filtramos los activos y los cerrados
+                    const activeMatches = stage.matches.filter(m => !Boolean(m.isFinished || (m.date && new Date() >= new Date(m.date))))
+                    const pastMatches = stage.matches.filter(m => Boolean(m.isFinished || (m.date && new Date() >= new Date(m.date))))
+
+                    return (
+                        <div key={stage.id} style={{ marginBottom: '32px' }}>
+                            <h2 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '16px' }}>{stage.name}</h2>
+
+                            {stage.matches.length === 0 ? (
+                                <p style={{ color: 'var(--text-muted)' }}>No hay partidos programados.</p>
+                            ) : (
+                                <>
+                                    {/* SECCIÓN 1: Partidos Activos */}
+                                    {activeMatches.length > 0 ? (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                                            {activeMatches.map(match => (
+                                                <PredictionCard
+                                                    key={match.id}
+                                                    match={match}
+                                                    stageName={stage.name}
+                                                    prediction={predictions[match.id]}
+                                                    onSave={handleSavePrediction}
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="glass-card" style={{ padding: '20px', textAlign: 'center', background: 'rgba(0,0,0,0.1)' }}>
+                                            <p style={{ color: 'var(--text-muted)', margin: 0 }}>No hay partidos abiertos para pronosticar en esta fase.</p>
+                                        </div>
+                                    )}
+
+                                    {/* SECCIÓN 2: Partidos Cerrados (Ocultos por defecto) */}
+                                    {pastMatches.length > 0 && (
+                                        <details style={{
+                                            marginTop: '24px',
+                                            padding: '16px',
+                                            borderRadius: '8px',
+                                            background: 'rgba(255, 255, 255, 0.02)',
+                                            border: '1px solid var(--border)'
+                                        }}>
+                                            <summary style={{
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold',
+                                                color: 'var(--text-muted)',
+                                                userSelect: 'none',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}>
+                                                <span>Ver partidos finalizados ({pastMatches.length})</span>
+                                            </summary>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px', marginTop: '20px' }}>
+                                                {pastMatches.map(match => (
+                                                    <PredictionCard
+                                                        key={match.id}
+                                                        match={match}
+                                                        stageName={stage.name}
+                                                        prediction={predictions[match.id]}
+                                                        onSave={handleSavePrediction}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </details>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )
+                })
             )}
         </div>
     )
