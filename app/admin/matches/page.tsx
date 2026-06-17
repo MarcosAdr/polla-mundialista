@@ -20,14 +20,25 @@ export default function AdminMatchesPage() {
     fetch('/api/admin/matches')
         .then(res => res.json())
         .then(data => {
-          setStages(data)
-          if (data.length > 0 && !selectedStage) setSelectedStage(data[0].id)
+          // ORDENAR PARTIDOS POR FECHA (CRONOLÓGICAMENTE)
+          const sortedStages = data.map((stage: Stage) => {
+            const sortedMatches = [...stage.matches].sort((a, b) => {
+              if (!a.date) return 1;
+              if (!b.date) return -1;
+              return new Date(a.date).getTime() - new Date(b.date).getTime();
+            });
+            return { ...stage, matches: sortedMatches };
+          });
+
+          setStages(sortedStages)
+          if (sortedStages.length > 0 && !selectedStage) setSelectedStage(sortedStages[0].id)
           setLoading(false)
         })
   }
 
   useEffect(() => {
     fetchStages()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleCreateMatch = async (e: React.FormEvent) => {
@@ -91,9 +102,8 @@ export default function AdminMatchesPage() {
     fetchStages()
   }
 
-  if (loading) return <div>Cargando...</div>
+  if (loading) return <div style={{ textAlign: 'center', marginTop: '40px' }}>Cargando panel...</div>
 
-  // Agrupar los equipos para los selectores
   const groups = Array.from(new Set(TEAMS.map(t => t.group)))
 
   return (
@@ -158,20 +168,107 @@ export default function AdminMatchesPage() {
         </div>
 
         <div>
-          {stages.map(stage => (
-              <div key={stage.id} style={{ marginBottom: '32px' }}>
-                <h2 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '16px' }}>{stage.name}</h2>
-                {stage.matches.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)' }}>No hay partidos en esta fase.</p>
-                ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                      {stage.matches.map(match => (
-                          <MatchAdminCard key={match.id} match={match} stageName={stage.name} onUpdate={handleUpdateResult} onDelete={handleDeleteMatch} onUpdateDate={handleUpdateDate} />
-                      ))}
-                    </div>
-                )}
-              </div>
-          ))}
+          {stages.map(stage => {
+            // LÓGICA DE TIEMPOS PARA EL ADMIN
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+
+            const yesterdayStart = new Date(todayStart)
+            yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+
+            const tomorrowStart = new Date(todayStart)
+            tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+
+            // 1. Partidos Cerrados (Ya tienen resultado)
+            const finishedMatches = stage.matches.filter(m => m.isFinished)
+
+            // 2. Partidos Pendientes (Sin resultado)
+            const pendingMatches = stage.matches.filter(m => !m.isFinished)
+
+            // 2.A Pendientes Visibles (Los que son de Ayer y Hoy)
+            const visiblePending = pendingMatches.filter(m => m.date && new Date(m.date) >= yesterdayStart && new Date(m.date) < tomorrowStart)
+
+            // 2.B Pendientes Ocultos (Los muy atrasados o los que son a futuro)
+            const hiddenPending = pendingMatches.filter(m => !m.date || new Date(m.date) < yesterdayStart || new Date(m.date) >= tomorrowStart)
+
+            return (
+                <div key={stage.id} style={{ marginBottom: '32px' }}>
+                  <h2 style={{ borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: '16px' }}>{stage.name}</h2>
+
+                  {stage.matches.length === 0 ? (
+                      <p style={{ color: 'var(--text-muted)' }}>No hay partidos en esta fase.</p>
+                  ) : (
+                      <>
+                        {/* 1. SECCIÓN PRINCIPAL A LA VISTA: Partidos de Ayer y Hoy */}
+                        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '16px' }}>A evaluar (Ayer y Hoy)</h3>
+                        {visiblePending.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                              {visiblePending.map(match => (
+                                  <MatchAdminCard key={match.id} match={match} stageName={stage.name} onUpdate={handleUpdateResult} onDelete={handleDeleteMatch} onUpdateDate={handleUpdateDate} />
+                              ))}
+                            </div>
+                        ) : (
+                            <div className="glass-card" style={{ padding: '20px', textAlign: 'center', background: 'rgba(0,0,0,0.1)' }}>
+                              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No hay partidos de ayer u hoy pendientes de resultado.</p>
+                            </div>
+                        )}
+
+                        {/* 2. ACORDEÓN: Partidos Pendientes Ocultos (Futuros o Atrasados) */}
+                        {hiddenPending.length > 0 && (
+                            <details style={{
+                              marginTop: '24px',
+                              padding: '16px',
+                              borderRadius: '8px',
+                              background: 'rgba(255, 255, 255, 0.02)',
+                              border: '1px solid var(--border)'
+                            }}>
+                              <summary style={{
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                color: 'var(--text-muted)',
+                                userSelect: 'none'
+                              }}>
+                                Ver otros pendientes (Futuros o Atrasados) ({hiddenPending.length})
+                              </summary>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
+                                {hiddenPending.map(match => (
+                                    <MatchAdminCard key={match.id} match={match} stageName={stage.name} onUpdate={handleUpdateResult} onDelete={handleDeleteMatch} onUpdateDate={handleUpdateDate} />
+                                ))}
+                              </div>
+                            </details>
+                        )}
+
+                        {/* 3. ACORDEÓN: Partidos Cerrados */}
+                        {finishedMatches.length > 0 && (
+                            <details style={{
+                              marginTop: '24px',
+                              padding: '16px',
+                              borderRadius: '8px',
+                              background: 'rgba(255, 255, 255, 0.02)',
+                              border: '1px solid var(--border)'
+                            }}>
+                              <summary style={{
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                color: 'var(--success)',
+                                userSelect: 'none'
+                              }}>
+                                Ver partidos cerrados (Ya evaluados) ({finishedMatches.length})
+                              </summary>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
+                                {finishedMatches.map(match => (
+                                    <MatchAdminCard key={match.id} match={match} stageName={stage.name} onUpdate={handleUpdateResult} onDelete={handleDeleteMatch} onUpdateDate={handleUpdateDate} />
+                                ))}
+                              </div>
+                            </details>
+                        )}
+                      </>
+                  )}
+                </div>
+            )
+          })}
         </div>
       </div>
   )
