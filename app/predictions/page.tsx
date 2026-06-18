@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { TEAMS } from '@/lib/teams'
 
 type Team = { id: string, name: string, flagUrl?: string | null }
@@ -8,19 +9,49 @@ type Match = { id: string, teamA: Team, teamB: Team, isFinished: boolean, teamAS
 type Stage = { id: string, name: string, matches: Match[] }
 type Prediction = { matchId: string, teamAScore: number, teamBScore: number, pointsEarned: number | null }
 
+// FECHA LÍMITE GENERAL: Ajusta este día y hora exactos en que inicia la última fecha de grupos
+const CLASIFICADOS_DEADLINE = new Date('2026-06-24T15:00:00')
+
 export default function PredictionsPage() {
     const [stages, setStages] = useState<Stage[]>([])
     const [predictions, setPredictions] = useState<Record<string, Prediction>>({})
     const [loading, setLoading] = useState(true)
-    // Estado para guardar el partido más próximo por cerrar
     const [urgentMatch, setUrgentMatch] = useState<Match | null>(null)
 
+    // Estados para el contador de clasificados
+    const [countdownText, setCountdownText] = useState('')
+    const [isQualifiersLocked, setIsQualifiersLocked] = useState(false)
+
     useEffect(() => {
+        // 1. Lógica del contador en tiempo real
+        const updateCountdown = () => {
+            const now = Date.now()
+            const diffMs = CLASIFICADOS_DEADLINE.getTime() - now
+
+            if (diffMs <= 0) {
+                setIsQualifiersLocked(true)
+                setCountdownText('Cerrado')
+                return
+            }
+
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+            let text = ''
+            if (days > 0) text += `${days}d `
+            text += `${hours}h y ${minutes}m`
+            setCountdownText(text)
+        }
+
+        updateCountdown()
+        const timerInterval = setInterval(updateCountdown, 60000) // Actualiza cada minuto
+
+        // 2. Fetch de datos iniciales
         fetch('/api/predictions')
             .then(res => res.json())
             .then(data => {
                 if (!data.error) {
-                    // Ordenar partidos cronológicamente
                     const sortedStages = data.stages.map((stage: Stage) => {
                         const sortedMatches = [...stage.matches].sort((a, b) => {
                             if (!a.date) return 1;
@@ -32,17 +63,15 @@ export default function PredictionsPage() {
 
                     setStages(sortedStages)
 
-                    // LÓGICA: Encontrar el partido más cercano en el futuro
                     let closest: Match | null = null;
                     let minTime = Infinity;
-                    const now = Date.now();
+                    const nowTime = Date.now();
 
                     data.stages.forEach((stage: Stage) => {
                         stage.matches.forEach((match: Match) => {
                             if (!match.isFinished && match.date) {
                                 const matchTime = new Date(match.date).getTime();
-                                // Si el partido está en el futuro y es el más cercano que hemos visto
-                                if (matchTime > now && matchTime < minTime) {
+                                if (matchTime > nowTime && matchTime < minTime) {
                                     minTime = matchTime;
                                     closest = match;
                                 }
@@ -59,6 +88,8 @@ export default function PredictionsPage() {
                 }
                 setLoading(false)
             })
+
+        return () => clearInterval(timerInterval)
     }, [])
 
     const handleSavePrediction = async (matchId: string, scoreA: number, scoreB: number) => {
@@ -71,7 +102,6 @@ export default function PredictionsPage() {
         })
     }
 
-    // Función auxiliar para calcular de forma amigable cuánto tiempo falta
     const getRemainingTimeText = (dateStr: string) => {
         const diffMs = new Date(dateStr).getTime() - Date.now();
         const diffMins = Math.floor(diffMs / 60000);
@@ -97,10 +127,10 @@ export default function PredictionsPage() {
                 <p style={{ color: 'var(--text-muted)' }}>Ingresa tus predicciones para los partidos activos.</p>
             </div>
 
-            {/* BANNER DE ALERTA GLOBAL (Solo si existe un partido próximo disponible) */}
+            {/* BANNER DE ALERTA GLOBAL */}
             {urgentMatch && (
                 <div className="glass-card" style={{
-                    borderLeft: '4px solid #f59e0b', // Borde color ámbar de advertencia
+                    borderLeft: '4px solid #f59e0b',
                     background: 'rgba(245, 158, 11, 0.04)',
                     padding: '16px 20px',
                     borderRadius: 'var(--radius)',
@@ -120,6 +150,58 @@ export default function PredictionsPage() {
                     </div>
                 </div>
             )}
+
+            {/* ACCESO A LOS CLASIFICADOS DE GRUPOS CON CONTADOR Y BLOQUEO */}
+            <div className="glass-card" style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '24px',
+                background: isQualifiersLocked
+                    ? 'rgba(255, 255, 255, 0.02)'
+                    : 'linear-gradient(135deg, rgba(0, 242, 254, 0.05), rgba(79, 172, 254, 0.1))',
+                border: isQualifiersLocked ? '1px solid var(--border)' : '1px solid var(--primary)',
+                flexWrap: 'wrap',
+                gap: '16px'
+            }}>
+                <div style={{ flex: '1 1 300px' }}>
+                    <h3 style={{ margin: '0 0 8px 0', color: isQualifiersLocked ? 'var(--text-muted)' : 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>🏆</span> Pronóstico de Clasificados
+                    </h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.4 }}>
+                        {isQualifiersLocked
+                            ? 'La fase de grupos ha entrado en sus instancias finales. Este pronóstico se encuentra cerrado oficialmente.'
+                            : 'Asegura puntos extra prediciendo qué selecciones superarán la Fase de Grupos. ¡Selecciona a los 32 clasificados ahora!'
+                        }
+                    </p>
+                </div>
+
+                {/* CAMBIO DINÁMICO: Si está bloqueado quita el botón y pone el estado */}
+                {isQualifiersLocked ? (
+                    <div style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        color: '#ef4444',
+                        padding: '12px 24px',
+                        borderRadius: 'var(--radius)',
+                        fontWeight: 'bold',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        🔒 Pronóstico Cerrado
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mdAlignItems: 'flex-end', gap: '10px' }}>
+                        <span style={{ fontSize: '0.9rem', color: '#f59e0b', fontWeight: 'bold', background: 'rgba(245, 158, 11, 0.1)', padding: '4px 12px', borderRadius: '12px' }}>
+                            ⏳ Cierra en: {countdownText}
+                        </span>
+                        <Link href="/predictions/qualifiers" style={{ textDecoration: 'none' }}>
+                            <button className="btn btn-primary" style={{ whiteSpace: 'nowrap', padding: '10px 20px', fontSize: '0.95rem', boxShadow: '0 4px 15px rgba(0, 242, 254, 0.3)' }}>
+                                Elegir Clasificados
+                            </button>
+                        </Link>
+                    </div>
+                )}
+            </div>
 
             {stages.length === 0 ? (
                 <div className="glass-card" style={{ textAlign: 'center', padding: '40px' }}>
@@ -157,7 +239,7 @@ export default function PredictionsPage() {
                                         </div>
                                     )}
 
-                                    {/* Partidos Cerrados (Ocultos por defecto) */}
+                                    {/* Partidos Cerrados */}
                                     {pastMatches.length > 0 && (
                                         <details style={{
                                             marginTop: '24px',
@@ -197,6 +279,8 @@ export default function PredictionsPage() {
         </div>
     )
 }
+
+
 
 function PredictionCard({ match, stageName, prediction, onSave }: { match: Match, stageName: string, prediction?: Prediction, onSave: (id: string, a: number, b: number) => void }) {
     const [scoreA, setScoreA] = useState(prediction?.teamAScore ?? '')

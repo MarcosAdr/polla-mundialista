@@ -11,15 +11,17 @@ datasource db {
 }
 
 model User {
-  id               String       @id @default(cuid())
-  username         String       @unique
-  password         String
-  role             String       @default("USER") // USER or ADMIN
-  contributedAmount Float       @default(0)
-  totalPoints      Int          @default(0)
-  predictions      Prediction[]
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  id                   String                     @id @default(cuid())
+  username             String                     @unique
+  password             String
+  role                 String                     @default("USER") // USER or ADMIN
+  contributedAmount    Float                      @default(0)
+  totalPoints          Int                        @default(0)
+  previousPosition     Int?                       // Para las flechas de tendencia en la tabla
+  predictions          Prediction[]
+  qualifierPredictions GroupQualifierPrediction[] // Relación con el nuevo modelo
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
 }
 
 model TournamentStage {
@@ -32,43 +34,43 @@ model TournamentStage {
 }
 
 model Team {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  flagUrl   String?
-  matchesAsA Match[] @relation("TeamA")
-  matchesAsB Match[] @relation("TeamB")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String   @unique
+  flagUrl    String?
+  matchesAsA Match[]  @relation("TeamA")
+  matchesAsB Match[]  @relation("TeamB")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Match {
-  id          String           @id @default(cuid())
+  id          String       @id @default(cuid())
   stageId     String
-  stage       TournamentStage  @relation(fields: [stageId], references: [id])
+  stage       TournamentStage @relation(fields: [stageId], references: [id])
   teamAId     String
-  teamA       Team             @relation("TeamA", fields: [teamAId], references: [id])
+  teamA       Team         @relation("TeamA", fields: [teamAId], references: [id])
   teamBId     String
-  teamB       Team             @relation("TeamB", fields: [teamBId], references: [id])
+  teamB       Team         @relation("TeamB", fields: [teamBId], references: [id])
   teamAScore  Int?
   teamBScore  Int?
-  isFinished  Boolean          @default(false)
+  isFinished  Boolean      @default(false)
   date        DateTime?
   predictions Prediction[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Prediction {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  matchId     String
-  match       Match    @relation(fields: [matchId], references: [id])
-  teamAScore  Int
-  teamBScore  Int
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  matchId      String
+  match        Match    @relation(fields: [matchId], references: [id])
+  teamAScore   Int
+  teamBScore   Int
   pointsEarned Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([userId, matchId])
 }
@@ -80,4 +82,18 @@ model Settings {
   drawPoints       Int      @default(1)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// NUEVO MODELO: Predicciones de Clasificados de Fase de Grupos
+model GroupQualifierPrediction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  teamName  String
+  groupName String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Evita que un usuario duplique el mismo equipo
+  @@unique([userId, teamName])
 }

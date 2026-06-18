@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link' // Importamos Link para navegación rápida
 import { TEAMS } from '@/lib/teams'
 
 type Team = { id: string, name: string, flagUrl?: string | null }
@@ -110,9 +111,29 @@ export default function AdminMatchesPage() {
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <h1>Gestión de Partidos</h1>
-          <a href="/admin/settings" className="btn btn-surface">
-            ⚙️ Configurar Puntos
-          </a>
+
+          {/* NUEVO CONTENEDOR PARA LOS BOTONES DE ADMIN */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <Link href="/admin/qualifiers" style={{ textDecoration: 'none' }}>
+              <button
+                  className="btn"
+                  style={{
+                    background: 'var(--danger)',
+                    color: 'white',
+                    border: 'none',
+                    boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)'
+                  }}
+              >
+                👑 Ingresar y Cerrar Clasificados
+              </button>
+            </Link>
+            <Link href="/admin/settings" style={{ textDecoration: 'none' }}>
+              <button className="btn btn-surface">
+                ⚙️ Configurar Puntos
+              </button>
+            </Link>
+          </div>
+
         </div>
 
         <div className="glass-card">
@@ -200,7 +221,7 @@ export default function AdminMatchesPage() {
                   ) : (
                       <>
                         {/* 1. SECCIÓN PRINCIPAL A LA VISTA: Partidos de Ayer y Hoy */}
-                        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '16px' }}>A evaluar (Ayer y Hoy)</h3>
+                        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '16px' }}>Partidos Activos</h3>
                         {visiblePending.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
                               {visiblePending.map(match => (
@@ -228,7 +249,7 @@ export default function AdminMatchesPage() {
                                 color: 'var(--text-muted)',
                                 userSelect: 'none'
                               }}>
-                                Ver otros pendientes (Futuros o Atrasados) ({hiddenPending.length})
+                               Partidos Pendientes ({hiddenPending.length})
                               </summary>
 
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
@@ -254,7 +275,7 @@ export default function AdminMatchesPage() {
                                 color: 'var(--success)',
                                 userSelect: 'none'
                               }}>
-                                Ver partidos cerrados (Ya evaluados) ({finishedMatches.length})
+                                Partidos Cerrados ({finishedMatches.length})
                               </summary>
 
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
