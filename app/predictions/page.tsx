@@ -190,7 +190,7 @@ export default function PredictionsPage() {
                         🔒 Pronóstico Cerrado
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mdAlignItems: 'flex-end', gap: '10px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                         <span style={{ fontSize: '0.9rem', color: '#f59e0b', fontWeight: 'bold', background: 'rgba(245, 158, 11, 0.1)', padding: '4px 12px', borderRadius: '12px' }}>
                             ⏳ Cierra en: {countdownText}
                         </span>
