@@ -13,7 +13,7 @@ export async function GET() {
       }
     }
   })
-  
+
   return NextResponse.json(stages)
 }
 
@@ -58,6 +58,26 @@ export async function PUT(request: Request) {
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
   try {
+    // =========================================================================
+    // 1. TOMAR LA FOTOGRAFÍA DE POSICIONES ANTERIORES (NUEVO)
+    // =========================================================================
+    const usersRanked = await prisma.user.findMany({
+      where: { role: 'USER' },
+      orderBy: { totalPoints: 'desc' }
+    });
+
+    const rankPromises = usersRanked.map((u, index) => {
+      return prisma.user.update({
+        where: { id: u.id },
+        data: { previousPosition: index + 1 } // Guardamos la posición (1, 2, 3...)
+      });
+    });
+
+    await prisma.$transaction(rankPromises);
+    // =========================================================================
+
+
+    // 2. LÓGICA NORMAL DE ACTUALIZACIÓN DE PARTIDOS Y PUNTOS
     const { matchId, teamAScore, teamBScore } = await request.json()
     const finalScoreA = Number(teamAScore)
     const finalScoreB = Number(teamBScore)
@@ -88,7 +108,7 @@ export async function PUT(request: Request) {
     // Update predictions and users
     for (const pred of predictions) {
       let points = 0
-      
+
       const predOutcome = pred.teamAScore > pred.teamBScore ? 'A' : pred.teamAScore < pred.teamBScore ? 'B' : 'DRAW'
 
       if (pred.teamAScore === finalScoreA && pred.teamBScore === finalScoreB) {
