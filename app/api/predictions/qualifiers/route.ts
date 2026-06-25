@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 
 // ÚNICA DECLARACIÓN DE LA FECHA LÍMITE (Con zona horaria de Ecuador)
-const CLASIFICADOS_DEADLINE = new Date('2026-06-25T10:00:00-05:00')
+const CLASIFICADOS_DEADLINE = new Date('2026-06-24T23:59:00-05:00')
 
 export async function GET() {
     const session = await getSession()
