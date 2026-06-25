@@ -2,7 +2,7 @@
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 
-// FIJAMOS LA FECHA LÍMITE AQUÍ TAMBIÉN (Añadimos -05:00 para asegurar la zona horaria de Ecuador y evitar bugs)
+// ÚNICA DECLARACIÓN DE LA FECHA LÍMITE (Con zona horaria de Ecuador)
 const CLASIFICADOS_DEADLINE = new Date('2026-06-24T23:59:00-05:00')
 
 export async function GET() {
@@ -24,15 +24,19 @@ export async function GET() {
 
 export async function POST(req: Request) {
     const session = await getSession()
-    if (!session || !session.user) {
+
+    // Verificamos bien la sesión y el ID
+    if (!session || !session.user || !session.user.id) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const CLASIFICADOS_DEADLINE = new Date('2026-06-24T23:59:00') // Debe ser la misma fecha del frontend
-    if (new Date() >= CLASIFICADOS_DEADLINE) {
+    // Usamos la constante global (No la declaramos de nuevo)
+    const now = new Date()
+    if (now >= CLASIFICADOS_DEADLINE) {
+        console.log("🚨 BLOQUEADO POR TIEMPO. Hora actual:", now, "Límite:", CLASIFICADOS_DEADLINE)
         return NextResponse.json({ error: 'El período para modificar los clasificados ha expirado.' }, { status: 400 })
     }
-    
+
     try {
         const { selections } = await req.json() // [{ teamName, groupName }, ...]
 
@@ -54,7 +58,9 @@ export async function POST(req: Request) {
         })
 
         return NextResponse.json({ success: true })
-    } catch (error) {
+    } catch (error: any) {
+        // Imprime el error exacto en la consola si Prisma falla
+        console.error("🚨 ERROR CRÍTICO AL GUARDAR PREDICCIONES:", error.message || error)
         return NextResponse.json({ error: 'Error al guardar predicciones' }, { status: 500 })
     }
 }
