@@ -25,7 +25,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const CLASIFICADOS_DEADLINE = new Date('2026-06-24T18:00:00') // Debe ser la misma fecha del frontend
+    const CLASIFICADOS_DEADLINE = new Date('2026-06-24T23:59:00') // Debe ser la misma fecha del frontend
     if (new Date() >= CLASIFICADOS_DEADLINE) {
         return NextResponse.json({ error: 'El período para modificar los clasificados ha expirado.' }, { status: 400 })
     }
