@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { TEAMS } from '@/lib/teams'
 
 // MISMA FECHA LÍMITE QUE EN EL RESTO DE LA APP
-const CLASIFICADOS_DEADLINE = new Date('2026-06-24T23:59:00-05:00')
+const CLASIFICADOS_DEADLINE = new Date('2026-06-25T10:00:00-05:00')
 
 export default function QualifiersPage() {
     // Estado que guarda las selecciones mapeadas por grupo: { 'A': ['Ecuador', 'Holanda'], 'B': [...] }
