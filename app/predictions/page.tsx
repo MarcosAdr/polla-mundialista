@@ -10,7 +10,7 @@ type Stage = { id: string, name: string, matches: Match[] }
 type Prediction = { matchId: string, teamAScore: number, teamBScore: number, pointsEarned: number | null }
 
 // FECHA LÍMITE GENERAL: Ajusta este día y hora exactos en que inicia la última fecha de grupos
-const CLASIFICADOS_DEADLINE = new Date('2026-06-24T23:59:00')
+const CLASIFICADOS_DEADLINE = new Date('2026-06-24T23:59:00-05:00')
 
 export default function PredictionsPage() {
     const [stages, setStages] = useState<Stage[]>([])
