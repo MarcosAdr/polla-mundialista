@@ -49,6 +49,7 @@ export default async function Home() {
       totalPoints: true,
       contributedAmount: true,
       previousPosition: true,
+      qualifierPoints: true,
     }
   })
 
@@ -121,7 +122,7 @@ export default async function Home() {
                     <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px' }}>
                       <span>Partidos: <strong>{myPoints - myQualifierPoints}</strong></span>
                       <span>|</span>
-                      <span>Clasificados: <strong style={{ color: 'var(--primary)' }}>{myQualifierPoints}</strong></span>
+                      <span>32 Clasificados: <strong style={{ color: 'var(--primary)' }}>{myQualifierPoints}</strong></span>
                     </div>
                   </div>
                 </div>
