@@ -349,7 +349,7 @@ function PredictionCard({ match, stageName, prediction, onSave }: any) {
 
             {isKnockout && isDraw && !lockedByTime && (
                 <div style={{ background: 'rgba(0, 242, 254, 0.05)', border: '1px solid var(--primary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--primary)', margin: '0 0 8px 0', fontWeight: 'bold' }}>Has pronosticado un empate. ¿Quién avanzará?</p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--primary)', margin: '0 0 8px 0', fontWeight: 'bold' }}>¿Quién clasifica?</p>
                     {/* Se bloquea también si no estamos en modo edición */}
                     <select className="input" value={penaltyWinner || ''} onChange={e => setPenaltyWinner(e.target.value as 'A' | 'B')} style={{ width: '100%' }} disabled={inputsDisabled}>
                         <option value="" disabled>Selecciona el ganador...</option>
