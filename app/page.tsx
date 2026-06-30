@@ -69,13 +69,17 @@ export default async function Home() {
   const totalPool = users.reduce((sum, user) => sum + user.contributedAmount, 0)
   const totalParticipants = users.length
 
-  // Find current user stats
+// Find current user stats
   let myPoints = 0
+  let myQualifierPoints = 0 // 👇 Nueva variable
   let myPosition = 0
+
   if (session && session.user.role === 'USER') {
     const myIndex = users.findIndex(u => u.id === session.user.id)
     if (myIndex !== -1) {
       myPoints = users[myIndex].totalPoints
+      // Aquí estamos tomando el nuevo campo que creamos en la BD
+      myQualifierPoints = (users[myIndex] as any).qualifierPoints || 0
       myPosition = myIndex + 1
     }
   }
@@ -107,11 +111,18 @@ export default async function Home() {
                   <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <Star size={26} color="#000" fill="#000" />
                   </div>
-                  <div>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mis Puntos</p>
-                    <p style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1, color: 'var(--text)' }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mis Puntos Totales</p>
+                    <p style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1, color: 'var(--text)', marginBottom: '8px' }}>
                       {myPoints} <span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--text-muted)' }}>pts</span>
                     </p>
+
+                    {/* DESGLOSE DE PUNTOS */}
+                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+                      <span>Partidos: <strong>{myPoints - myQualifierPoints}</strong></span>
+                      <span>|</span>
+                      <span>Clasificados: <strong style={{ color: 'var(--primary)' }}>{myQualifierPoints}</strong></span>
+                    </div>
                   </div>
                 </div>
 

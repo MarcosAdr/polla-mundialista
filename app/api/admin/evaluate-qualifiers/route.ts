@@ -22,7 +22,7 @@ export async function POST(req: Request) {
             include: { qualifierPredictions: true }
         })
 
-        // 2. Preparamos las actualizaciones masivas
+        // 2. Preparamos las actualizaciones masivas de forma segura
         const updatePromises = users.map(user => {
             // Extraemos solo los nombres de los equipos que eligió el usuario
             const userTeams = user.qualifierPredictions.map(p => p.teamName)
@@ -41,22 +41,37 @@ export async function POST(req: Request) {
                 bonusPoints = 5 // Rango exacto: De 15 a 19 aciertos (Premio de Consuelo)
             }
 
-            // Si el usuario ganó puntos, preparamos su actualización en la BD
-            if (bonusPoints > 0) {
+            // 👇 ESTRATEGIA DE BLINDAJE ANTI-DUPLICADOS 👇
+            // Obtenemos los puntos que YA le habíamos asignado previamente por clasificados (si aplica)
+            const previousBonus = user.qualifierPoints || 0
+
+            // Calculamos la diferencia matemática neta
+            const pointDifference = bonusPoints - previousBonus
+
+            // Si la diferencia es distinta de cero, significa que hay que ajustar su puntaje (ya sea primera asignación o corrección)
+            if (pointDifference !== 0) {
                 return prisma.user.update({
                     where: { id: user.id },
-                    data: { totalPoints: { increment: bonusPoints } }
+                    data: {
+                        // Almacenamos el nuevo valor exacto en su cajón de respaldo
+                        qualifierPoints: bonusPoints,
+                        // Ajustamos el total global únicamente con la diferencia neta para no inflar la tabla
+                        totalPoints: { increment: pointDifference }
+                    }
                 })
             }
 
-            return null // Si no llegó a los 15 aciertos, no suma nada
-        }).filter(p => p !== null) // Filtramos los nulos
+            return null
+        }).filter(p => p !== null)
 
         // 4. Ejecutamos todas las actualizaciones de golpe de forma segura
-        await prisma.$transaction(updatePromises as any)
+        if (updatePromises.length > 0) {
+            await prisma.$transaction(updatePromises as any)
+        }
 
         return NextResponse.json({ success: true })
-    } catch (error) {
+    } catch (error: any) {
+        console.error("🚨 ERROR CRÍTICO EN EVALUACIÓN DE CLASIFICADOS:", error.message || error)
         return NextResponse.json({ error: 'Error interno al calcular puntos' }, { status: 500 })
     }
 }

@@ -19,6 +19,7 @@ model User {
   totalPoints          Int                        @default(0)
   previousPosition     Int?                       // Para las flechas de tendencia en la tabla
   predictions          Prediction[]
+  qualifierPoints      Int?                       @default(0)
   qualifierPredictions GroupQualifierPrediction[] // Relación con el nuevo modelo
   createdAt            DateTime                   @default(now())
   updatedAt            DateTime                   @updatedAt
