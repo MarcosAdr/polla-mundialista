@@ -59,7 +59,7 @@ export async function PUT(request: Request) {
 
   try {
     // =========================================================================
-    // 1. TOMAR LA FOTOGRAFÍA DE POSICIONES ANTERIORES (NUEVO)
+    // 1. TOMAR LA FOTOGRAFÍA DE POSICIONES ANTERIORES
     // =========================================================================
     const usersRanked = await prisma.user.findMany({
       where: { role: 'USER' },
@@ -69,62 +69,96 @@ export async function PUT(request: Request) {
     const rankPromises = usersRanked.map((u, index) => {
       return prisma.user.update({
         where: { id: u.id },
-        data: { previousPosition: index + 1 } // Guardamos la posición (1, 2, 3...)
+        data: { previousPosition: index + 1 }
       });
     });
 
     await prisma.$transaction(rankPromises);
+
+
     // =========================================================================
-
-
-    // 2. LÓGICA NORMAL DE ACTUALIZACIÓN DE PARTIDOS Y PUNTOS
-    const { matchId, teamAScore, teamBScore } = await request.json()
+    // 2. EXTRAER TODO DEL REQUEST AQUÍ (SOLO UNA LECTURA GLOBAL)
+    // =========================================================================
+    const { matchId, teamAScore, teamBScore, penaltyWinner } = await request.json()
     const finalScoreA = Number(teamAScore)
     const finalScoreB = Number(teamBScore)
 
+    // Actualizamos el partido real incluyendo quién fue el penaltyWinner en la BD
     const match = await prisma.match.update({
       where: { id: matchId },
       data: {
         teamAScore: finalScoreA,
         teamBScore: finalScoreB,
         isFinished: true,
+        penaltyWinner: finalScoreA === finalScoreB ? penaltyWinner : null
       }
     })
 
-    // Fetch settings for points
+    // Configuración de puntos de la app
     const settings = await prisma.settings.findFirst()
     const exactPts = settings?.exactMatchPoints || 3
     const tendencyPts = settings?.tendencyPoints || 1
     const drawPts = settings?.drawPoints || 1
 
-    // Calculate match outcome
     const matchOutcome = finalScoreA > finalScoreB ? 'A' : finalScoreA < finalScoreB ? 'B' : 'DRAW'
 
-    // Fetch predictions
+    // Buscamos todas las predicciones de este partido
     const predictions = await prisma.prediction.findMany({
       where: { matchId }
     })
 
-    // Update predictions and users
+    // Validamos la fase del torneo
+    const matchData = await prisma.match.findUnique({ where: { id: matchId }, include: { stage: true }})
+    const isKnockout = matchData?.stage.name !== 'Fase de Grupos'
+
+    // =========================================================================
+    // 3. CICLO DE USUARIOS (YA NO TIENE LECTURAS DE REQUEST INTERNAS)
+    // =========================================================================
     for (const pred of predictions) {
       let points = 0
 
       const predOutcome = pred.teamAScore > pred.teamBScore ? 'A' : pred.teamAScore < pred.teamBScore ? 'B' : 'DRAW'
 
-      if (pred.teamAScore === finalScoreA && pred.teamBScore === finalScoreB) {
-        points = exactPts
-      } else if (matchOutcome === 'DRAW' && predOutcome === 'DRAW') {
-        points = drawPts
-      } else if (predOutcome === matchOutcome && matchOutcome !== 'DRAW') {
-        points = tendencyPts
+      if (isKnockout) {
+        // Usamos las variables globales obtenidas en el paso 2
+        const realAdvancingTeam = matchOutcome === 'DRAW' ? penaltyWinner : matchOutcome
+        const predAdvancingTeam = predOutcome === 'DRAW' ? pred.penaltyWinner : predOutcome
+
+        if (matchOutcome === 'DRAW') {
+          if (predOutcome === 'DRAW' && pred.penaltyWinner === penaltyWinner) {
+            points = 4 // Empate + Ganador exacto de penales
+          } else if (predAdvancingTeam === realAdvancingTeam) {
+            points = 2 // No le dio al empate pero sí al que clasificó
+          } else {
+            points = 0
+          }
+        } else {
+          if (pred.teamAScore === finalScoreA && pred.teamBScore === finalScoreB) {
+            points = exactPts
+          } else if (predAdvancingTeam === realAdvancingTeam) {
+            points = tendencyPts
+          } else {
+            points = 0
+          }
+        }
+      } else {
+        // Fase de Grupos regular
+        if (pred.teamAScore === finalScoreA && pred.teamBScore === finalScoreB) {
+          points = exactPts
+        } else if (matchOutcome === 'DRAW' && predOutcome === 'DRAW') {
+          points = drawPts
+        } else if (predOutcome === matchOutcome && matchOutcome !== 'DRAW') {
+          points = tendencyPts
+        }
       }
 
+      // Guardamos los puntos de esta predicción
       await prisma.prediction.update({
         where: { id: pred.id },
         data: { pointsEarned: points }
       })
 
-      // Recalculate user total points
+      // Recalculamos y actualizamos de inmediato el puntaje total del usuario
       const userPredictions = await prisma.prediction.findMany({
         where: { userId: pred.userId, pointsEarned: { not: null } }
       })
@@ -137,7 +171,8 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch (error: any) {
+    console.error("🚨 ERROR CRÍTICO EN EVALUACIÓN DE PARTIDO:", error.message || error)
     return NextResponse.json({ error: 'Error al actualizar partido' }, { status: 500 })
   }
 }
