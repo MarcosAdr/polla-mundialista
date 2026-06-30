@@ -56,6 +56,7 @@ model Match {
   isFinished  Boolean      @default(false)
   date        DateTime?
   predictions Prediction[]
+  penaltyWinner String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -71,6 +72,7 @@ model Prediction {
   pointsEarned Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  penaltyWinner String?
 
   @@unique([userId, matchId])
 }

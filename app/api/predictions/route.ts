@@ -4,9 +4,11 @@ import { getSession } from '@/lib/session'
 
 export async function GET() {
   const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!session || !session.user || !session.user.id) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
 
-  // Fetch active stages and their matches
+  // Obtenemos las fases activas
   const stages = await prisma.tournamentStage.findMany({
     where: { isActive: true },
     include: {
@@ -16,7 +18,7 @@ export async function GET() {
     }
   })
 
-  // Fetch user predictions
+  // Obtenemos las predicciones del usuario
   const predictions = await prisma.prediction.findMany({
     where: { userId: session.user.id }
   })
@@ -26,39 +28,73 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  // 1. CANDADO DE SEGURIDAD MÁS ROBUSTO
+  if (!session || !session.user || !session.user.id) {
+    return NextResponse.json({ error: 'No autorizado o sesión expirada' }, { status: 401 })
+  }
 
   try {
-    const { matchId, teamAScore, teamBScore } = await request.json()
+    // 2. AHORA RECIBIMOS TAMBIÉN EL penaltyWinner
+    const { matchId, teamAScore, teamBScore, penaltyWinner } = await request.json()
 
-    // Ensure match is not finished
-    const match = await prisma.match.findUnique({ where: { id: matchId } })
-    if (!match || match.isFinished) {
-      return NextResponse.json({ error: 'El partido ya terminó' }, { status: 400 })
+    // Validar que los marcadores no vengan vacíos
+    if (teamAScore === undefined || teamBScore === undefined || teamAScore === '' || teamBScore === '') {
+      return NextResponse.json({ error: 'Faltan los marcadores' }, { status: 400 })
     }
 
-    if (match.date && new Date() >= match.date) {
-      return NextResponse.json({ error: 'El partido ya ha comenzado o finalizado' }, { status: 403 })
+    // Buscamos el partido y su fase (para saber si es eliminatoria)
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { stage: true }
+    })
+
+    if (!match) return NextResponse.json({ error: 'Partido no encontrado' }, { status: 404 })
+    if (match.isFinished) return NextResponse.json({ error: 'El partido ya terminó' }, { status: 400 })
+
+    if (match.date) {
+      const matchTime = new Date(match.date).getTime()
+      if (Date.now() >= matchTime) {
+        return NextResponse.json({ error: 'El partido ya ha comenzado o finalizado' }, { status: 403 })
+      }
     }
 
+    // 3. VALIDACIÓN DE PENALES
+    const isKnockout = match.stage.name !== 'Fase de Grupos'
+    const isDraw = Number(teamAScore) === Number(teamBScore)
+    let finalPenaltyWinner = null
+
+    // Si es eliminatoria y el usuario puso empate, debemos asegurarnos de que haya elegido un ganador
+    if (isKnockout && isDraw) {
+      if (!penaltyWinner) {
+        return NextResponse.json({ error: 'Falta elegir al ganador de los penales' }, { status: 400 })
+      }
+      finalPenaltyWinner = penaltyWinner
+    }
+
+    // 4. GUARDADO (UPSERT) ACTUALIZADO
     const prediction = await prisma.prediction.upsert({
       where: {
         userId_matchId: { userId: session.user.id, matchId }
       },
       update: {
         teamAScore: Number(teamAScore),
-        teamBScore: Number(teamBScore)
+        teamBScore: Number(teamBScore),
+        penaltyWinner: finalPenaltyWinner // Guardamos el ganador de penales
       },
       create: {
         userId: session.user.id,
         matchId,
         teamAScore: Number(teamAScore),
-        teamBScore: Number(teamBScore)
+        teamBScore: Number(teamBScore),
+        penaltyWinner: finalPenaltyWinner // Guardamos el ganador de penales
       }
     })
 
     return NextResponse.json(prediction)
-  } catch (error) {
-    return NextResponse.json({ error: 'Error al guardar pronóstico' }, { status: 500 })
+
+  } catch (error: any) {
+    console.error("🚨 ERROR AL GUARDAR PRONÓSTICO:", error.message || error)
+    return NextResponse.json({ error: 'Error interno al guardar pronóstico' }, { status: 500 })
   }
 }

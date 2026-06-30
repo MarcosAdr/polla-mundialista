@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link' // Importamos Link para navegación rápida
+import Link from 'next/link'
 import { TEAMS } from '@/lib/teams'
 
 type Team = { id: string, name: string, flagUrl?: string | null }
-type Match = { id: string, teamA: Team, teamB: Team, teamAScore: number | null, teamBScore: number | null, isFinished: boolean, date?: string | null }
+// 👇 Agregamos penaltyWinner al tipo Match
+type Match = { id: string, teamA: Team, teamB: Team, teamAScore: number | null, teamBScore: number | null, isFinished: boolean, date?: string | null, penaltyWinner?: string | null }
 type Stage = { id: string, name: string, isActive: boolean, matches: Match[] }
 
 export default function AdminMatchesPage() {
@@ -21,7 +22,6 @@ export default function AdminMatchesPage() {
     fetch('/api/admin/matches')
         .then(res => res.json())
         .then(data => {
-          // ORDENAR PARTIDOS POR FECHA (CRONOLÓGICAMENTE)
           const sortedStages = data.map((stage: Stage) => {
             const sortedMatches = [...stage.matches].sort((a, b) => {
               if (!a.date) return 1;
@@ -74,12 +74,13 @@ export default function AdminMatchesPage() {
     }
   }
 
-  const handleUpdateResult = async (matchId: string, scoreA: number, scoreB: number) => {
+  // 👇 Actualizamos la función para recibir y enviar penaltyWinner
+  const handleUpdateResult = async (matchId: string, scoreA: number, scoreB: number, penaltyWinner?: string | null) => {
     if (confirm('¿Confirmar resultado? Esto calculará los puntos de los usuarios.')) {
       await fetch('/api/admin/matches', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matchId, teamAScore: scoreA, teamBScore: scoreB })
+        body: JSON.stringify({ matchId, teamAScore: scoreA, teamBScore: scoreB, penaltyWinner })
       })
       fetchStages()
     }
@@ -112,7 +113,6 @@ export default function AdminMatchesPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <h1>Gestión de Partidos</h1>
 
-          {/* NUEVO CONTENEDOR PARA LOS BOTONES DE ADMIN */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <Link href="/admin/qualifiers" style={{ textDecoration: 'none' }}>
               <button
@@ -190,7 +190,6 @@ export default function AdminMatchesPage() {
 
         <div>
           {stages.map(stage => {
-            // LÓGICA DE TIEMPOS PARA EL ADMIN
             const todayStart = new Date()
             todayStart.setHours(0, 0, 0, 0)
 
@@ -200,16 +199,9 @@ export default function AdminMatchesPage() {
             const tomorrowStart = new Date(todayStart)
             tomorrowStart.setDate(tomorrowStart.getDate() + 1)
 
-            // 1. Partidos Cerrados (Ya tienen resultado)
             const finishedMatches = stage.matches.filter(m => m.isFinished)
-
-            // 2. Partidos Pendientes (Sin resultado)
             const pendingMatches = stage.matches.filter(m => !m.isFinished)
-
-            // 2.A Pendientes Visibles (Los que son de Ayer y Hoy)
             const visiblePending = pendingMatches.filter(m => m.date && new Date(m.date) >= yesterdayStart && new Date(m.date) < tomorrowStart)
-
-            // 2.B Pendientes Ocultos (Los muy atrasados o los que son a futuro)
             const hiddenPending = pendingMatches.filter(m => !m.date || new Date(m.date) < yesterdayStart || new Date(m.date) >= tomorrowStart)
 
             return (
@@ -220,8 +212,7 @@ export default function AdminMatchesPage() {
                       <p style={{ color: 'var(--text-muted)' }}>No hay partidos en esta fase.</p>
                   ) : (
                       <>
-                        {/* 1. SECCIÓN PRINCIPAL A LA VISTA: Partidos de Ayer y Hoy */}
-                        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '16px' }}>Partidos Activos</h3>
+                        <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '16px' }}>A evaluar (Ayer y Hoy)</h3>
                         {visiblePending.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
                               {visiblePending.map(match => (
@@ -234,24 +225,11 @@ export default function AdminMatchesPage() {
                             </div>
                         )}
 
-                        {/* 2. ACORDEÓN: Partidos Pendientes Ocultos (Futuros o Atrasados) */}
                         {hiddenPending.length > 0 && (
-                            <details style={{
-                              marginTop: '24px',
-                              padding: '16px',
-                              borderRadius: '8px',
-                              background: 'rgba(255, 255, 255, 0.02)',
-                              border: '1px solid var(--border)'
-                            }}>
-                              <summary style={{
-                                cursor: 'pointer',
-                                fontWeight: 'bold',
-                                color: 'var(--text-muted)',
-                                userSelect: 'none'
-                              }}>
-                               Partidos Pendientes ({hiddenPending.length})
+                            <details style={{ marginTop: '24px', padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)' }}>
+                              <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: 'var(--text-muted)', userSelect: 'none' }}>
+                                Ver otros pendientes (Futuros o Atrasados) ({hiddenPending.length})
                               </summary>
-
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
                                 {hiddenPending.map(match => (
                                     <MatchAdminCard key={match.id} match={match} stageName={stage.name} onUpdate={handleUpdateResult} onDelete={handleDeleteMatch} onUpdateDate={handleUpdateDate} />
@@ -260,24 +238,11 @@ export default function AdminMatchesPage() {
                             </details>
                         )}
 
-                        {/* 3. ACORDEÓN: Partidos Cerrados */}
                         {finishedMatches.length > 0 && (
-                            <details style={{
-                              marginTop: '24px',
-                              padding: '16px',
-                              borderRadius: '8px',
-                              background: 'rgba(255, 255, 255, 0.02)',
-                              border: '1px solid var(--border)'
-                            }}>
-                              <summary style={{
-                                cursor: 'pointer',
-                                fontWeight: 'bold',
-                                color: 'var(--success)',
-                                userSelect: 'none'
-                              }}>
-                                Partidos Cerrados ({finishedMatches.length})
+                            <details style={{ marginTop: '24px', padding: '16px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)' }}>
+                              <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: 'var(--success)', userSelect: 'none' }}>
+                                Ver partidos cerrados (Ya evaluados) ({finishedMatches.length})
                               </summary>
-
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
                                 {finishedMatches.map(match => (
                                     <MatchAdminCard key={match.id} match={match} stageName={stage.name} onUpdate={handleUpdateResult} onDelete={handleDeleteMatch} onUpdateDate={handleUpdateDate} />
@@ -295,16 +260,33 @@ export default function AdminMatchesPage() {
   )
 }
 
-function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: { match: Match, stageName: string, onUpdate: (id: string, a: number, b: number) => void, onDelete: (id: string) => void, onUpdateDate: (id: string, d: string) => void }) {
+function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: { match: Match, stageName: string, onUpdate: (id: string, a: number, b: number, penaltyWinner?: string | null) => void, onDelete: (id: string) => void, onUpdateDate: (id: string, d: string) => void }) {
   const [scoreA, setScoreA] = useState(match.teamAScore ?? 0)
   const [scoreB, setScoreB] = useState(match.teamBScore ?? 0)
+
+  // 👇 Estado para manejar quién ganó en penales si hay empate
+  const [penaltyWinner, setPenaltyWinner] = useState<'A' | 'B' | null>(match.penaltyWinner as 'A' | 'B' | null)
+
   const [isEditingDate, setIsEditingDate] = useState(false)
   const [editDate, setEditDate] = useState(match.date ? new Date(new Date(match.date).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '')
+
   const groupName = stageName === 'Fase de Grupos' ? (TEAMS.find(t => t.name === match.teamA.name)?.group || '') : ''
+  const isKnockout = stageName !== 'Fase de Grupos'
+  const isDraw = scoreA === scoreB
 
   const handleSaveDate = () => {
     onUpdateDate(match.id, editDate)
     setIsEditingDate(false)
+  }
+
+  const handleSaveResult = () => {
+    if (isKnockout && isDraw && !penaltyWinner) {
+      alert("En fases eliminatorias, si hay empate, debes seleccionar quién avanzó (Penales/Alargue).")
+      return
+    }
+    // Si no es empate o no es fase eliminatoria, enviamos null en penaltyWinner
+    const finalPenaltyWinner = (isKnockout && isDraw) ? penaltyWinner : null
+    onUpdate(match.id, scoreA, scoreB, finalPenaltyWinner)
   }
 
   return (
@@ -317,31 +299,14 @@ function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: 
         ) : null}
 
         <div style={{ position: 'absolute', top: 6, right: 12, display: 'flex', gap: '8px' }}>
-          <button
-              onClick={() => setIsEditingDate(!isEditingDate)}
-              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', padding: '2px' }}
-              title="Editar fecha"
-          >
-            ✏️
-          </button>
-          <button
-              onClick={() => onDelete(match.id)}
-              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '2px' }}
-              title="Eliminar partido"
-          >
-            ×
-          </button>
+          <button onClick={() => setIsEditingDate(!isEditingDate)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', padding: '2px' }} title="Editar fecha">✏️</button>
+          <button onClick={() => onDelete(match.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '2px' }} title="Eliminar partido">×</button>
         </div>
 
         {isEditingDate && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', marginTop: '16px' }}>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Modificar Fecha y Hora:</label>
-              <input
-                  type="datetime-local"
-                  className="input"
-                  value={editDate}
-                  onChange={e => setEditDate(e.target.value)}
-              />
+              <input type="datetime-local" className="input" value={editDate} onChange={e => setEditDate(e.target.value)} />
               <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.85rem' }} onClick={handleSaveDate}>Guardar Fecha</button>
             </div>
         )}
@@ -359,15 +324,36 @@ function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: 
         </div>
 
         {match.isFinished ? (
-            <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '8px' }}>
-              Resultado Final: <strong>{match.teamAScore} - {match.teamBScore}</strong>
+            <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
+              Resultado Final: <strong style={{ fontSize: '1.2rem' }}>{match.teamAScore} - {match.teamBScore}</strong>
+              {/* Si hubo ganador por penales, lo mostramos */}
+              {match.penaltyWinner && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--primary)', marginTop: '8px', fontWeight: 'bold' }}>
+                    🌟 Clasifica: {match.penaltyWinner === 'A' ? match.teamA.name : match.teamB.name}
+                  </div>
+              )}
             </div>
         ) : (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
-              <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreA} onChange={e => setScoreA(Number(e.target.value))} min={0} />
-              <span>-</span>
-              <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreB} onChange={e => setScoreB(Number(e.target.value))} min={0} />
-              <button className="btn btn-surface" onClick={() => onUpdate(match.id, scoreA, scoreB)}>Guardar</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreA} onChange={e => setScoreA(Number(e.target.value))} min={0} />
+                <span>-</span>
+                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreB} onChange={e => setScoreB(Number(e.target.value))} min={0} />
+              </div>
+
+              {/* 👇 Lógica interactiva para fases eliminatorias */}
+              {isKnockout && isDraw && (
+                  <div style={{ width: '100%', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '0.85rem', color: '#ef4444', margin: '0 0 8px 0', fontWeight: 'bold' }}>¡Empate! ¿Quién avanza por penales/alargue?</p>
+                    <select className="input" value={penaltyWinner || ''} onChange={e => setPenaltyWinner(e.target.value as 'A' | 'B')} style={{ width: '100%' }}>
+                      <option value="" disabled>Selecciona el ganador...</option>
+                      <option value="A">{match.teamA.name}</option>
+                      <option value="B">{match.teamB.name}</option>
+                    </select>
+                  </div>
+              )}
+
+              <button className="btn btn-surface" onClick={handleSaveResult} style={{ width: '100%' }}>Guardar Resultado</button>
             </div>
         )}
       </div>

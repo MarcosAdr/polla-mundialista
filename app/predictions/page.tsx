@@ -92,13 +92,13 @@ export default function PredictionsPage() {
         return () => clearInterval(timerInterval)
     }, [])
 
-    const handleSavePrediction = async (matchId: string, scoreA: number, scoreB: number) => {
-        setPredictions(prev => ({ ...prev, [matchId]: { matchId, teamAScore: scoreA, teamBScore: scoreB, pointsEarned: null } }))
+    const handleSavePrediction = async (matchId: string, scoreA: number, scoreB: number, penaltyWinner?: string | null) => {
+        setPredictions(prev => ({ ...prev, [matchId]: { matchId, teamAScore: scoreA, teamBScore: scoreB, penaltyWinner, pointsEarned: null } }))
 
         await fetch('/api/predictions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ matchId, teamAScore: scoreA, teamBScore: scoreB })
+            body: JSON.stringify({ matchId, teamAScore: scoreA, teamBScore: scoreB, penaltyWinner })
         })
     }
 
@@ -282,128 +282,96 @@ export default function PredictionsPage() {
 
 
 
-function PredictionCard({ match, stageName, prediction, onSave }: { match: Match, stageName: string, prediction?: Prediction, onSave: (id: string, a: number, b: number) => void }) {
-    const [scoreA, setScoreA] = useState(prediction?.teamAScore ?? '')
-    const [scoreB, setScoreB] = useState(prediction?.teamBScore ?? '')
+// COMPONENTE PREDICTION CARD ACTUALIZADO
+function PredictionCard({ match, stageName, prediction, onSave }: any) {
+    const [scoreA, setScoreA] = useState<number | string>(prediction?.teamAScore ?? '')
+    const [scoreB, setScoreB] = useState<number | string>(prediction?.teamBScore ?? '')
+
+    // Nuevo estado para guardar quién gana en penales
+    const [penaltyWinner, setPenaltyWinner] = useState<'A' | 'B' | null>(prediction?.penaltyWinner ?? null)
+
     const [saving, setSaving] = useState(false)
-    const [saved, setSaved] = useState(false)
+    const [savedMessage, setSavedMessage] = useState(false)
 
-    const [isEditing, setIsEditing] = useState(prediction === undefined)
+    const isFinished = match.isFinished
+    const hasStarted = match.date && new Date() >= new Date(match.date)
+    const locked = isFinished || hasStarted
 
-    const groupName = stageName === 'Fase de Grupos' ? (TEAMS.find(t => t.name === match.teamA.name)?.group || '') : ''
+    const isKnockout = stageName !== 'Fase de Grupos'
+    const isDraw = scoreA !== '' && scoreB !== '' && Number(scoreA) === Number(scoreB)
 
-    const isLocked = Boolean(match.isFinished || (match.date && new Date() >= new Date(match.date)))
+    const handleSave = async () => {
+        if (scoreA === '' || scoreB === '') return
 
-    const handleSave = () => {
-        if (scoreA !== '' && scoreB !== '' && !isLocked) {
-            setSaving(true)
-            onSave(match.id, Number(scoreA), Number(scoreB))
-            setTimeout(() => {
-                setSaving(false)
-                setSaved(true)
-                setIsEditing(false)
-                setTimeout(() => setSaved(false), 2000)
-            }, 500)
+        // Validación obligatoria
+        if (isKnockout && isDraw && !penaltyWinner) {
+            alert("En fases eliminatorias, si pronosticas un empate, debes elegir quién avanzará en penales.")
+            return
         }
+
+        setSaving(true)
+        const finalPenaltyWinner = (isKnockout && isDraw) ? penaltyWinner : null
+        await onSave(match.id, Number(scoreA), Number(scoreB), finalPenaltyWinner)
+
+        setSaving(false)
+        setSavedMessage(true)
+        setTimeout(() => setSavedMessage(false), 2000)
     }
 
     return (
-        <div className="glass-card" style={{ padding: '24px 20px 20px', position: 'relative' }}>
+        <div className="glass-card" style={{ padding: '20px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {match.date && <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(match.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>}
 
-            {groupName && <div style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.8rem', fontWeight: 800, color: 'var(--secondary)' }}>{groupName.toUpperCase()}</div>}
-            {match.date && <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', fontSize: '0.75rem', color: isLocked ? 'var(--danger)' : 'var(--text-muted)' }}>{new Date(match.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    {match.teamA.flagUrl && <img src={`https://flagcdn.com/w40/${match.teamA.flagUrl}.png`} width="24" alt="flag" style={{ borderRadius: '4px' }} />}
+                    <span style={{ fontWeight: 'bold' }}>{match.teamA.name}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'flex-end' }}>
+                    <span style={{ fontWeight: 'bold' }}>{match.teamB.name}</span>
+                    {match.teamB.flagUrl && <img src={`https://flagcdn.com/w40/${match.teamB.flagUrl}.png`} width="24" alt="flag" style={{ borderRadius: '4px' }} />}
+                </div>
+            </div>
 
-            {isLocked && (
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 'var(--radius)' }}>
-          <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginBottom: '8px' }}>
-            {match.isFinished ? 'Partido Finalizado' : '🔒 Pronóstico Cerrado'}
-          </span>
-                    {match.isFinished && (
-                        <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '16px' }}>
-              Resultado: {match.teamAScore} - {match.teamBScore}
-            </span>
-                    )}
-                    {prediction && prediction.pointsEarned !== null && (
-                        <span style={{ marginTop: '8px', color: prediction.pointsEarned > 0 ? 'var(--success)' : 'var(--text-muted)', fontWeight: 'bold' }}>
-              +{prediction.pointsEarned} pts
-            </span>
-                    )}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', alignItems: 'center' }}>
+                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreA} onChange={e => setScoreA(e.target.value)} disabled={locked} min={0} />
+                <span style={{ color: 'var(--text-muted)' }}>-</span>
+                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreB} onChange={e => setScoreB(e.target.value)} disabled={locked} min={0} />
+            </div>
+
+            {/* CAJA DE PENALES CUANDO ES EMPATE */}
+            {isKnockout && isDraw && !locked && (
+                <div style={{ background: 'rgba(0, 242, 254, 0.05)', border: '1px solid var(--primary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--primary)', margin: '0 0 8px 0', fontWeight: 'bold' }}>¿Quién clasifica?</p>
+                    <select className="input" value={penaltyWinner || ''} onChange={e => setPenaltyWinner(e.target.value as 'A' | 'B')} style={{ width: '100%' }}>
+                        <option value="" disabled>Selecciona el ganador...</option>
+                        <option value="A">{match.teamA.name}</option>
+                        <option value="B">{match.teamB.name}</option>
+                    </select>
                 </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', marginTop: '16px' }}>
-                <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                    {match.teamA.flagUrl ? (
-                        <img src={`https://flagcdn.com/w80/${match.teamA.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
-                    ) : (
-                        <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
-                    )}
-                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamA.name}</span>
+            {/* Mostrar selección de penales si está bloqueado y el usuario la eligió */}
+            {locked && prediction?.penaltyWinner && isKnockout && prediction.teamAScore === prediction.teamBScore && (
+                <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}>
+                    Pusiste que avanzaba: {prediction.penaltyWinner === 'A' ? match.teamA.name : match.teamB.name}
                 </div>
+            )}
 
-                <div style={{ padding: '0 16px', color: 'var(--text-muted)', fontWeight: 600 }}>vs</div>
-
-                <div style={{ flex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                    {match.teamB.flagUrl ? (
-                        <img src={`https://flagcdn.com/w80/${match.teamB.flagUrl}.png`} width="48" alt="flag" style={{ borderRadius: '6px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }} />
-                    ) : (
-                        <div style={{ width: '48px', height: '32px', background: 'var(--surface-hover)', borderRadius: '6px' }} />
+            {!locked ? (
+                <button className={`btn ${savedMessage ? 'btn-surface' : 'btn-primary'}`} onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
+                    {savedMessage ? '✓ Guardado' : saving ? 'Guardando...' : 'Guardar'}
+                </button>
+            ) : (
+                <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        {isFinished ? `Finalizó: ${match.teamAScore} - ${match.teamBScore}` : 'Partido bloqueado'}
+                    </span>
+                    {prediction?.pointsEarned !== null && prediction?.pointsEarned !== undefined && (
+                        <div style={{ color: 'var(--success)', fontWeight: 'bold', marginTop: '4px' }}>+{prediction.pointsEarned} pts</div>
                     )}
-                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{match.teamB.name}</span>
                 </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center' }}>
-                <input
-                    type="number"
-                    className="input"
-                    style={{
-                        width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px',
-                        opacity: !isEditing ? 0.6 : 1,
-                        cursor: !isEditing ? 'default' : 'text'
-                    }}
-                    value={scoreA}
-                    onChange={e => setScoreA(e.target.value)}
-                    min={0}
-                    placeholder="-"
-                    disabled={Boolean(!isEditing || isLocked)}
-                />
-                <input
-                    type="number"
-                    className="input"
-                    style={{
-                        width: '80px', textAlign: 'center', fontSize: '1.5rem', padding: '8px',
-                        opacity: !isEditing ? 0.6 : 1,
-                        cursor: !isEditing ? 'default' : 'text'
-                    }}
-                    value={scoreB}
-                    onChange={e => setScoreB(e.target.value)}
-                    min={0}
-                    placeholder="-"
-                    disabled={Boolean(!isEditing || isLocked)}
-                />
-            </div>
-
-            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
-                {!isEditing && !isLocked ? (
-                    <button
-                        className="btn btn-surface"
-                        style={{ width: '100%', borderColor: 'var(--border)' }}
-                        onClick={() => setIsEditing(true)}
-                    >
-                        Editar
-                    </button>
-                ) : (
-                    <button
-                        className={`btn ${saved ? 'btn-surface' : 'btn-primary'}`}
-                        style={{ width: '100%', borderColor: saved ? 'var(--success)' : 'transparent', color: saved ? 'var(--success)' : undefined }}
-                        onClick={handleSave}
-                        disabled={Boolean(saving || scoreA === '' || scoreB === '' || isLocked)}
-                    >
-                        {saving ? 'Guardando...' : saved ? '¡Guardado!' : isLocked ? 'Cerrado' : 'Guardar'}
-                    </button>
-                )}
-            </div>
+            )}
         </div>
     )
 }
