@@ -264,11 +264,14 @@ function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: 
   const [scoreA, setScoreA] = useState(match.teamAScore ?? 0)
   const [scoreB, setScoreB] = useState(match.teamBScore ?? 0)
 
-  // 👇 Estado para manejar quién ganó en penales si hay empate
+  // Estado para manejar quién ganó en penales si hay empate
   const [penaltyWinner, setPenaltyWinner] = useState<'A' | 'B' | null>(match.penaltyWinner as 'A' | 'B' | null)
 
   const [isEditingDate, setIsEditingDate] = useState(false)
   const [editDate, setEditDate] = useState(match.date ? new Date(new Date(match.date).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '')
+
+  // 👇 NUEVO ESTADO: Controla si estamos corrigiendo un partido ya cerrado
+  const [isEditingResult, setIsEditingResult] = useState(false)
 
   const groupName = stageName === 'Fase de Grupos' ? (TEAMS.find(t => t.name === match.teamA.name)?.group || '') : ''
   const isKnockout = stageName !== 'Fase de Grupos'
@@ -281,12 +284,12 @@ function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: 
 
   const handleSaveResult = () => {
     if (isKnockout && isDraw && !penaltyWinner) {
-      alert("En fases eliminatorias, si hay empate, debes seleccionar quién avanzó (Penales/Alargue).")
+      alert("En fases eliminatorias, si hay empate, debes seleccionar quién avanzá (Penales/Alargue).")
       return
     }
-    // Si no es empate o no es fase eliminatoria, enviamos null en penaltyWinner
     const finalPenaltyWinner = (isKnockout && isDraw) ? penaltyWinner : null
     onUpdate(match.id, scoreA, scoreB, finalPenaltyWinner)
+    setIsEditingResult(false) // Cerramos el modo edición al guardar
   }
 
   return (
@@ -323,17 +326,29 @@ function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: 
           </div>
         </div>
 
-        {match.isFinished ? (
-            <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
-              Resultado Final: <strong style={{ fontSize: '1.2rem' }}>{match.teamAScore} - {match.teamBScore}</strong>
-              {/* Si hubo ganador por penales, lo mostramos */}
+        {/* 👇 MODIFICADO: Si el partido terminó Y NO estamos editando, muestra la información estática con la opción de corregir */}
+        {match.isFinished && !isEditingResult ? (
+            <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+              <div>
+                Resultado Final: <strong style={{ fontSize: '1.2rem' }}>{match.teamAScore} - {match.teamBScore}</strong>
+              </div>
               {match.penaltyWinner && (
-                  <div style={{ fontSize: '0.85rem', color: 'var(--primary)', marginTop: '8px', fontWeight: 'bold' }}>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}>
                     🌟 Clasifica: {match.penaltyWinner === 'A' ? match.teamA.name : match.teamB.name}
                   </div>
               )}
+
+              {/* Botón para habilitar la edición de marcadores cerrados */}
+              <button
+                  className="btn btn-surface"
+                  onClick={() => setIsEditingResult(true)}
+                  style={{ padding: '4px 12px', fontSize: '0.8rem', marginTop: '6px', borderColor: 'rgba(255,255,255,0.1)' }}
+              >
+                ✏️ Corregir / Reevaluar Puntos
+              </button>
             </div>
         ) : (
+            // Formulario interactivo de carga/edición
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreA} onChange={e => setScoreA(Number(e.target.value))} min={0} />
@@ -341,10 +356,9 @@ function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: 
                 <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreB} onChange={e => setScoreB(Number(e.target.value))} min={0} />
               </div>
 
-              {/* 👇 Lógica interactiva para fases eliminatorias */}
               {isKnockout && isDraw && (
                   <div style={{ width: '100%', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#ef4444', margin: '0 0 8px 0', fontWeight: 'bold' }}>¡Empate! ¿Quién avanza por penales/alargue?</p>
+                    <p style={{ fontSize: '0.85rem', color: '#ef4444', margin: '0 0 8px 0', fontWeight: 'bold' }}>¡Empate! ¿Quién clasifica?</p>
                     <select className="input" value={penaltyWinner || ''} onChange={e => setPenaltyWinner(e.target.value as 'A' | 'B')} style={{ width: '100%' }}>
                       <option value="" disabled>Selecciona el ganador...</option>
                       <option value="A">{match.teamA.name}</option>
@@ -353,7 +367,14 @@ function MatchAdminCard({ match, stageName, onUpdate, onDelete, onUpdateDate }: 
                   </div>
               )}
 
-              <button className="btn btn-surface" onClick={handleSaveResult} style={{ width: '100%' }}>Guardar Resultado</button>
+              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                {match.isFinished && (
+                    <button className="btn btn-surface" onClick={() => setIsEditingResult(false)} style={{ flex: 1 }}>Cancelar</button>
+                )}
+                <button className="btn btn-primary" onClick={handleSaveResult} style={{ flex: 2 }}>
+                  {match.isFinished ? 'Recalcular Todo' : 'Guardar Resultado'}
+                </button>
+              </div>
             </div>
         )}
       </div>
