@@ -282,20 +282,28 @@ export default function PredictionsPage() {
 
 
 
-// COMPONENTE PREDICTION CARD ACTUALIZADO
+// COMPONENTE PREDICTION CARD ACTUALIZADO CON MODO EDICIÓN
 function PredictionCard({ match, stageName, prediction, onSave }: any) {
     const [scoreA, setScoreA] = useState<number | string>(prediction?.teamAScore ?? '')
     const [scoreB, setScoreB] = useState<number | string>(prediction?.teamBScore ?? '')
-
-    // Nuevo estado para guardar quién gana en penales
     const [penaltyWinner, setPenaltyWinner] = useState<'A' | 'B' | null>(prediction?.penaltyWinner ?? null)
 
     const [saving, setSaving] = useState(false)
-    const [savedMessage, setSavedMessage] = useState(false)
+
+    // NUEVA LÓGICA: ¿Estamos en modo edición?
+    // Si ya existe un pronóstico válido en la base de datos, empezamos en modo lectura (false)
+    // Si es un partido nuevo sin pronóstico, empezamos en modo edición (true)
+    const hasExistingPrediction = prediction?.teamAScore !== undefined && prediction?.teamAScore !== null;
+    const [isEditing, setIsEditing] = useState(!hasExistingPrediction)
 
     const isFinished = match.isFinished
     const hasStarted = match.date && new Date() >= new Date(match.date)
-    const locked = isFinished || hasStarted
+
+    // Bloqueado definitivo por el sistema (el partido ya empezó o terminó)
+    const lockedByTime = isFinished || hasStarted
+
+    // Las casillas se bloquean si el sistema lo bloquea, O si NO estamos en modo edición
+    const inputsDisabled = lockedByTime || !isEditing
 
     const isKnockout = stageName !== 'Fase de Grupos'
     const isDraw = scoreA !== '' && scoreB !== '' && Number(scoreA) === Number(scoreB)
@@ -303,7 +311,6 @@ function PredictionCard({ match, stageName, prediction, onSave }: any) {
     const handleSave = async () => {
         if (scoreA === '' || scoreB === '') return
 
-        // Validación obligatoria
         if (isKnockout && isDraw && !penaltyWinner) {
             alert("En fases eliminatorias, si pronosticas un empate, debes elegir quién avanzará en penales.")
             return
@@ -314,8 +321,8 @@ function PredictionCard({ match, stageName, prediction, onSave }: any) {
         await onSave(match.id, Number(scoreA), Number(scoreB), finalPenaltyWinner)
 
         setSaving(false)
-        setSavedMessage(true)
-        setTimeout(() => setSavedMessage(false), 2000)
+        // Apenas termina de guardar, salimos del modo edición para proteger las casillas
+        setIsEditing(false)
     }
 
     return (
@@ -334,16 +341,17 @@ function PredictionCard({ match, stageName, prediction, onSave }: any) {
             </div>
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', alignItems: 'center' }}>
-                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreA} onChange={e => setScoreA(e.target.value)} disabled={locked} min={0} />
+                {/* Ahora usamos inputsDisabled para saber si bloquear la casilla */}
+                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreA} onChange={e => setScoreA(e.target.value)} disabled={inputsDisabled} min={0} />
                 <span style={{ color: 'var(--text-muted)' }}>-</span>
-                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreB} onChange={e => setScoreB(e.target.value)} disabled={locked} min={0} />
+                <input type="number" className="input" style={{ width: '60px', textAlign: 'center' }} value={scoreB} onChange={e => setScoreB(e.target.value)} disabled={inputsDisabled} min={0} />
             </div>
 
-            {/* CAJA DE PENALES CUANDO ES EMPATE */}
-            {isKnockout && isDraw && !locked && (
+            {isKnockout && isDraw && !lockedByTime && (
                 <div style={{ background: 'rgba(0, 242, 254, 0.05)', border: '1px solid var(--primary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--primary)', margin: '0 0 8px 0', fontWeight: 'bold' }}>¿Quién clasifica?</p>
-                    <select className="input" value={penaltyWinner || ''} onChange={e => setPenaltyWinner(e.target.value as 'A' | 'B')} style={{ width: '100%' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--primary)', margin: '0 0 8px 0', fontWeight: 'bold' }}>Has pronosticado un empate. ¿Quién avanzará?</p>
+                    {/* Se bloquea también si no estamos en modo edición */}
+                    <select className="input" value={penaltyWinner || ''} onChange={e => setPenaltyWinner(e.target.value as 'A' | 'B')} style={{ width: '100%' }} disabled={inputsDisabled}>
                         <option value="" disabled>Selecciona el ganador...</option>
                         <option value="A">{match.teamA.name}</option>
                         <option value="B">{match.teamB.name}</option>
@@ -351,17 +359,23 @@ function PredictionCard({ match, stageName, prediction, onSave }: any) {
                 </div>
             )}
 
-            {/* Mostrar selección de penales si está bloqueado y el usuario la eligió */}
-            {locked && prediction?.penaltyWinner && isKnockout && prediction.teamAScore === prediction.teamBScore && (
+            {lockedByTime && prediction?.penaltyWinner && isKnockout && prediction.teamAScore === prediction.teamBScore && (
                 <div style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}>
                     Pusiste que avanzaba: {prediction.penaltyWinner === 'A' ? match.teamA.name : match.teamB.name}
                 </div>
             )}
 
-            {!locked ? (
-                <button className={`btn ${savedMessage ? 'btn-surface' : 'btn-primary'}`} onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
-                    {savedMessage ? '✓ Guardado' : saving ? 'Guardando...' : 'Guardar'}
-                </button>
+            {!lockedByTime ? (
+                // BOTONES DINÁMICOS: Muestra Guardar o Editar dependiendo del estado
+                isEditing ? (
+                    <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
+                        {saving ? 'Guardando...' : 'Guardar Pronóstico'}
+                    </button>
+                ) : (
+                    <button className="btn btn-surface" onClick={() => setIsEditing(true)} style={{ width: '100%', borderColor: 'var(--primary)', color: 'var(--primary)' }}>
+                        Editar
+                    </button>
+                )
             ) : (
                 <div style={{ textAlign: 'center', padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                     <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
