@@ -77,13 +77,12 @@ export async function PUT(request: Request) {
 
 
     // =========================================================================
-    // 2. EXTRAER TODO DEL REQUEST AQUÍ (SOLO UNA LECTURA GLOBAL)
+    // 2. EXTRAER DATOS Y ACTUALIZAR EL PARTIDO REAL
     // =========================================================================
     const { matchId, teamAScore, teamBScore, penaltyWinner } = await request.json()
     const finalScoreA = Number(teamAScore)
     const finalScoreB = Number(teamBScore)
 
-    // Actualizamos el partido real incluyendo quién fue el penaltyWinner en la BD
     const match = await prisma.match.update({
       where: { id: matchId },
       data: {
@@ -94,7 +93,6 @@ export async function PUT(request: Request) {
       }
     })
 
-    // Configuración de puntos de la app
     const settings = await prisma.settings.findFirst()
     const exactPts = settings?.exactMatchPoints || 3
     const tendencyPts = settings?.tendencyPoints || 1
@@ -102,17 +100,15 @@ export async function PUT(request: Request) {
 
     const matchOutcome = finalScoreA > finalScoreB ? 'A' : finalScoreA < finalScoreB ? 'B' : 'DRAW'
 
-    // Buscamos todas las predicciones de este partido
     const predictions = await prisma.prediction.findMany({
       where: { matchId }
     })
 
-    // Validamos la fase del torneo
     const matchData = await prisma.match.findUnique({ where: { id: matchId }, include: { stage: true }})
     const isKnockout = matchData?.stage.name !== 'Fase de Grupos'
 
     // =========================================================================
-    // 3. CICLO DE USUARIOS (YA NO TIENE LECTURAS DE REQUEST INTERNAS)
+    // 3. CICLO DE USUARIOS: LÓGICA DE PUNTOS BLINDADA
     // =========================================================================
     for (const pred of predictions) {
       let points = 0
@@ -120,7 +116,6 @@ export async function PUT(request: Request) {
       const predOutcome = pred.teamAScore > pred.teamBScore ? 'A' : pred.teamAScore < pred.teamBScore ? 'B' : 'DRAW'
 
       if (isKnockout) {
-        // Usamos las variables globales obtenidas en el paso 2
         const realAdvancingTeam = matchOutcome === 'DRAW' ? penaltyWinner : matchOutcome
         const predAdvancingTeam = predOutcome === 'DRAW' ? pred.penaltyWinner : predOutcome
 
@@ -152,22 +147,27 @@ export async function PUT(request: Request) {
         }
       }
 
-      // Guardamos los puntos de esta predicción
+      // 👇 AQUÍ ESTÁ LA MAGIA 👇
+      // 1. Calculamos la diferencia entre los puntos que tenía y los nuevos que ganó
+      const pointDifference = points - (pred.pointsEarned || 0);
+
+      // 2. Guardamos los puntos en su tarjeta de predicción
       await prisma.prediction.update({
         where: { id: pred.id },
         data: { pointsEarned: points }
       })
 
-      // Recalculamos y actualizamos de inmediato el puntaje total del usuario
-      const userPredictions = await prisma.prediction.findMany({
-        where: { userId: pred.userId, pointsEarned: { not: null } }
-      })
-      const totalPoints = userPredictions.reduce((sum, p) => sum + (p.pointsEarned || 0), 0)
-
-      await prisma.user.update({
-        where: { id: pred.userId },
-        data: { totalPoints }
-      })
+      // 3. Si hubo un cambio real, sumamos o restamos ESA diferencia a su total global sin borrar nada más
+      if (pointDifference !== 0) {
+        await prisma.user.update({
+          where: { id: pred.userId },
+          data: {
+            totalPoints: {
+              increment: pointDifference
+            }
+          }
+        })
+      }
     }
 
     return NextResponse.json({ success: true })
