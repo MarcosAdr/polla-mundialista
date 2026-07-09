@@ -21,6 +21,7 @@ model User {
   predictions          Prediction[]
   qualifierPoints      Int?                       @default(0)
   qualifierPredictions GroupQualifierPrediction[] // Relación con el nuevo modelo
+  podium               WorldCupPodium?
   createdAt            DateTime                   @default(now())
   updatedAt            DateTime                   @updatedAt
 }
@@ -99,4 +100,14 @@ model GroupQualifierPrediction {
 
   // Evita que un usuario duplique el mismo equipo
   @@unique([userId, teamName])
+}
+
+model WorldCupPodium {
+  id              String   @id @default(cuid())
+  userId          String   @unique // Un usuario solo puede tener un podio
+  user            User     @relation(fields: [userId], references: [id])
+  championName    String
+  secondPlaceName String
+  thirdPlaceName  String
+  createdAt       DateTime @default(now())
 }

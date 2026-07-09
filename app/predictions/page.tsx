@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { TEAMS } from '@/lib/teams'
+import PodiumForm from '@/components/PodiumForm'
 
 type Team = { id: string, name: string, flagUrl?: string | null }
 type Match = { id: string, teamA: Team, teamB: Team, isFinished: boolean, teamAScore: number | null, teamBScore: number | null, date?: string | null }
@@ -276,6 +277,10 @@ export default function PredictionsPage() {
                     )
                 })
             )}
+            <div style={{ marginTop: '40px', borderTop: '2px solid var(--border)', paddingTop: '40px' }}>
+                <h2 style={{ textAlign: 'center', marginBottom: '24px' }}>🏆 Podio Final del Mundial</h2>
+                <PodiumForm />
+            </div>
         </div>
     )
 }
