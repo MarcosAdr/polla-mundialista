@@ -2,15 +2,25 @@
 import { useState, useEffect } from 'react'
 import { TEAMS } from '@/lib/teams'
 
+// Ajusta esta fecha a la que necesites
+const PODIUM_DEADLINE = new Date('2026-07-09T15:00:00-05:00')
+
 export default function PodiumForm() {
     const [champion, setChampion] = useState('')
     const [second, setSecond] = useState('')
     const [third, setThird] = useState('')
     const [saving, setSaving] = useState(false)
     const [locked, setLocked] = useState(false)
+    const [isPastDeadline, setIsPastDeadline] = useState(false)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        // Verificar si ya pasó la fecha
+        if (new Date() >= PODIUM_DEADLINE) {
+            setIsPastDeadline(true)
+        }
+
+        // Cargar podio existente
         fetch('/api/predictions/podium')
             .then(res => res.json())
             .then(data => {
@@ -25,6 +35,7 @@ export default function PodiumForm() {
     }, [])
 
     const handleSave = async () => {
+        if (isPastDeadline) return alert("El plazo para el podio ha expirado.")
         if (!champion || !second || !third) return alert("Completa los 3 lugares")
         if (!confirm("⚠️ Una vez guardado tu podio, NO podrás modificarlo. ¿Estás seguro?")) return
 
@@ -47,6 +58,11 @@ export default function PodiumForm() {
 
     return (
         <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px', margin: '0 auto' }}>
+            {isPastDeadline && (
+                <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '12px', borderRadius: '8px', marginBottom: '16px', textAlign: 'center', fontWeight: 'bold' }}>
+                    🚫 El plazo para ingresar el podio expiró el {PODIUM_DEADLINE.toLocaleDateString()}.
+                </div>
+            )}
 
             {/* NOTIFICACIÓN DINÁMICA */}
             <div style={{
@@ -66,7 +82,7 @@ export default function PodiumForm() {
 
             <div>
                 <label style={{ display: 'block', fontSize: '0.8rem' }}>🥇 Campeón</label>
-                <select className="input" value={champion} onChange={(e) => setChampion(e.target.value)} disabled={locked} style={{ width: '100%' }}>
+                <select className="input" value={champion} onChange={(e) => setChampion(e.target.value)} disabled={locked || isPastDeadline} style={{ width: '100%' }}>
                     <option value="">Selecciona...</option>
                     {TEAMS.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
@@ -74,7 +90,7 @@ export default function PodiumForm() {
 
             <div>
                 <label style={{ display: 'block', fontSize: '0.8rem' }}>🥈 Segundo Lugar</label>
-                <select className="input" value={second} onChange={(e) => setSecond(e.target.value)} disabled={locked} style={{ width: '100%' }}>
+                <select className="input" value={second} onChange={(e) => setSecond(e.target.value)} disabled={locked || isPastDeadline} style={{ width: '100%' }}>
                     <option value="">Selecciona...</option>
                     {availableTeams([champion]).map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
@@ -82,13 +98,13 @@ export default function PodiumForm() {
 
             <div>
                 <label style={{ display: 'block', fontSize: '0.8rem' }}>🥉 Tercer Lugar</label>
-                <select className="input" value={third} onChange={(e) => setThird(e.target.value)} disabled={locked} style={{ width: '100%' }}>
+                <select className="input" value={third} onChange={(e) => setThird(e.target.value)} disabled={locked || isPastDeadline} style={{ width: '100%' }}>
                     <option value="">Selecciona...</option>
                     {availableTeams([champion, second]).map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
             </div>
 
-            {!locked && (
+            {!locked && !isPastDeadline && (
                 <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
                     {saving ? 'Guardando...' : 'Guardar Podio Final'}
                 </button>
