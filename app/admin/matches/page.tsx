@@ -127,6 +127,20 @@ export default function AdminMatchesPage() {
                 👑 Ingresar y Cerrar Clasificados
               </button>
             </Link>
+            <Link href="/admin/podium" style={{ textDecoration: 'none' }}>
+              <button
+                  className="btn"
+                  style={{
+                    background: 'var(--secondary)',
+                    color: 'black',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 15px rgba(0, 242, 254, 0.3)'
+                  }}
+              >
+                🏆 Evaluar Podio Final
+              </button>
+            </Link>
             <Link href="/admin/settings" style={{ textDecoration: 'none' }}>
               <button className="btn btn-surface">
                 ⚙️ Configurar Puntos

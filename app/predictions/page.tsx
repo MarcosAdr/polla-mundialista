@@ -177,6 +177,7 @@ export default function PredictionsPage() {
                     </p>
                 </div>
 
+                
                 {/* CAMBIO DINÁMICO: Si está bloqueado quita el botón y pone el estado */}
                 {isQualifiersLocked ? (
                     <div style={{
